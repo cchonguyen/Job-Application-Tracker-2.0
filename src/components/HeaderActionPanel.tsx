@@ -23,6 +23,9 @@ import {
 import { JobStatus } from '../types';
 import type { ThemeAccent, ThemeMode } from '../lib/theme';
 import { ThemeSelector } from './ThemeSelector';
+import { GoogleSheetsBadge } from './GoogleSheetsBadge';
+import type { User } from 'firebase/auth';
+import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
 
 interface HeaderActionPanelProps {
   totalJobs: number;
@@ -33,6 +36,17 @@ interface HeaderActionPanelProps {
   themeAccent: ThemeAccent;
   onThemeModeChange: (mode: ThemeMode) => void;
   onThemeAccentChange: (accent: ThemeAccent) => void;
+  googleSheetsProps?: {
+    user: User | null;
+    hasToken: boolean;
+    connectedSheet: ConnectedSheet | null;
+    autoSync: boolean;
+    onAutoSyncChange: (enabled: boolean) => void;
+    syncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+    lastSyncedAt: Date | null;
+    onSyncNow: () => Promise<boolean>;
+    onOpenModal: () => void;
+  };
 }
 
 const STATUS_OPTIONS: { value: JobStatus; label: string; icon: React.ComponentType<{ className?: string }>; color: string; bg: string; border: string }[] = [
@@ -73,6 +87,7 @@ export const HeaderActionPanel = ({
   themeAccent,
   onThemeModeChange,
   onThemeAccentChange,
+  googleSheetsProps,
 }: HeaderActionPanelProps) => {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [url, setUrl] = useState('');
@@ -155,12 +170,27 @@ export const HeaderActionPanel = ({
               </>
             )}
           </div>
-          <ThemeSelector
-            mode={themeMode}
-            accent={themeAccent}
-            onModeChange={onThemeModeChange}
-            onAccentChange={onThemeAccentChange}
-          />
+          <div className="flex items-center gap-2.5 shrink-0">
+            {googleSheetsProps && (
+              <GoogleSheetsBadge
+                user={googleSheetsProps.user}
+                hasToken={googleSheetsProps.hasToken}
+                connectedSheet={googleSheetsProps.connectedSheet}
+                autoSync={googleSheetsProps.autoSync}
+                onAutoSyncChange={googleSheetsProps.onAutoSyncChange}
+                syncStatus={googleSheetsProps.syncStatus}
+                lastSyncedAt={googleSheetsProps.lastSyncedAt}
+                onSyncNow={googleSheetsProps.onSyncNow}
+                onOpenModal={googleSheetsProps.onOpenModal}
+              />
+            )}
+            <ThemeSelector
+              mode={themeMode}
+              accent={themeAccent}
+              onModeChange={onThemeModeChange}
+              onAccentChange={onThemeAccentChange}
+            />
+          </div>
         </div>
 
         {/* URL Posting Form */}

@@ -54,6 +54,7 @@ interface JobSpreadsheetProps {
   onDeleteJob: (id: string) => Promise<void>;
   onImportJobs: (jobs: JobRecord[]) => Promise<void>;
   isImporting?: boolean;
+  onOpenGoogleSheetsModal?: () => void;
 }
 
 type SortField = 'dateApplied' | 'company' | 'jobTitle' | 'salary';
@@ -67,6 +68,7 @@ export const JobSpreadsheet = ({
   onDeleteJob,
   onImportJobs,
   isImporting = false,
+  onOpenGoogleSheetsModal,
 }: JobSpreadsheetProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<Set<JobStatus>>(
@@ -523,8 +525,21 @@ export const JobSpreadsheet = ({
                   <div className="border-t border-slate-100 my-1" />
 
                   <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none">
-                    Data Portability
+                    Data Portability & Sync
                   </div>
+                  {onOpenGoogleSheetsModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenGoogleSheetsModal();
+                        setIsActionsDropdownOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs text-slate-700 flex items-center gap-2 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="font-medium text-emerald-700">Sync with Google Sheets</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

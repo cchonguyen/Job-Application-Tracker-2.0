@@ -10,6 +10,8 @@ import { JobSpreadsheet } from './components/JobSpreadsheet';
 import { JobDetailModal } from './components/JobDetailModal';
 import { EditJobModal } from './components/EditJobModal';
 import { AtsDiagnosticModal } from './components/AtsDiagnosticModal';
+import { GoogleSheetsSyncModal } from './components/GoogleSheetsSyncModal';
+import { useGoogleSheetsSync } from './hooks/useGoogleSheetsSync';
 import { JobRecord, JobStatus } from './types';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
@@ -25,6 +27,10 @@ export default function App() {
   const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
   const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
   const [isAtsDebuggerOpen, setIsAtsDebuggerOpen] = useState(false);
+  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
+
+  // Google Sheets Synchronization Hook
+  const sheetsSync = useGoogleSheetsSync(jobs);
 
   const [isImporting, setIsImporting] = useState(false);
 
@@ -308,6 +314,25 @@ export default function App() {
         themeAccent={theme.accent}
         onThemeModeChange={setMode}
         onThemeAccentChange={setAccent}
+        googleSheetsProps={{
+          user: sheetsSync.user,
+          hasToken: sheetsSync.hasToken,
+          connectedSheet: sheetsSync.connectedSheet,
+          autoSync: sheetsSync.autoSync,
+          onAutoSyncChange: sheetsSync.setAutoSync,
+          syncStatus: sheetsSync.syncStatus,
+          lastSyncedAt: sheetsSync.lastSyncedAt,
+          onSyncNow: async () => {
+            const ok = await sheetsSync.syncNow(jobs);
+            if (ok) {
+              showToast('Google Sheet successfully synchronized!', 'success');
+            } else if (sheetsSync.lastError) {
+              showToast(sheetsSync.lastError, 'error');
+            }
+            return ok;
+          },
+          onOpenModal: () => setIsSheetsModalOpen(true),
+        }}
       />
 
       {/* Main Container */}
@@ -321,10 +346,11 @@ export default function App() {
           onDeleteJob={handleDeleteJob}
           onImportJobs={handleImportJobs}
           isImporting={isImporting}
+          onOpenGoogleSheetsModal={() => setIsSheetsModalOpen(true)}
         />
 
         {/* Analytics Section */}
-        <AnalyticsBar jobs={jobs} />
+        <AnalyticsBar jobs={jobs} onSelectJob={(job) => setSelectedJob(job)} />
       </main>
 
       {/* Detail Inspection Drawer / Modal */}
@@ -349,6 +375,37 @@ export default function App() {
 
       {/* ATS Diagnostic & Test Suite Modal */}
       <AtsDiagnosticModal isOpen={isAtsDebuggerOpen} onClose={() => setIsAtsDebuggerOpen(false)} />
+
+      {/* Google Sheets Sync Modal */}
+      <GoogleSheetsSyncModal
+        isOpen={isSheetsModalOpen}
+        onClose={() => setIsSheetsModalOpen(false)}
+        user={sheetsSync.user}
+        hasToken={sheetsSync.hasToken}
+        isLoggingIn={sheetsSync.isLoggingIn}
+        connectedSheet={sheetsSync.connectedSheet}
+        autoSync={sheetsSync.autoSync}
+        onAutoSyncChange={sheetsSync.setAutoSync}
+        syncStatus={sheetsSync.syncStatus}
+        lastSyncedAt={sheetsSync.lastSyncedAt}
+        lastError={sheetsSync.lastError}
+        availableSheets={sheetsSync.availableSheets}
+        isLoadingSheets={sheetsSync.isLoadingSheets}
+        onLogin={sheetsSync.handleLogin}
+        onLogout={sheetsSync.handleLogout}
+        onFetchSheets={sheetsSync.fetchSheetsList}
+        onCreateAndConnect={sheetsSync.createAndConnect}
+        onConnectExisting={sheetsSync.connectExisting}
+        onSyncNow={async () => {
+          const ok = await sheetsSync.syncNow(jobs);
+          if (ok) {
+            showToast('Google Sheet successfully synchronized!', 'success');
+          }
+          return ok;
+        }}
+        onDisconnectSheet={sheetsSync.disconnectSheet}
+        jobsCount={jobs.length}
+      />
     </div>
   );
 }
