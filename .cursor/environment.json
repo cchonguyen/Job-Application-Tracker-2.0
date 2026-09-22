@@ -1,0 +1,17 @@
+{
+  "name": "Job Application Easy Tracker",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "user": "ubuntu",
+  "install": "bun install",
+  "terminals": [
+    {
+      "name": "dev-server",
+      "command": "DISABLE_HMR=true bun run dev"
+    }
+  ],
+  "ports": [
+    3000
+  ]
+}
