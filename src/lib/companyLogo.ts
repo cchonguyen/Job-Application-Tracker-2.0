@@ -4,6 +4,7 @@ const ATS_HOST_HINTS = [
   'ashbyhq.com',
   'myworkdayjobs.com',
   'workdayjobs.com',
+  'workable.com',
   'darwinbox.com',
   'icims.com',
   'jobvite.com',

@@ -1,5 +1,5 @@
 export interface AtsDetection {
-  type: 'greenhouse' | 'lever' | 'darwinbox' | 'gem' | null;
+  type: 'greenhouse' | 'lever' | 'darwinbox' | 'gem' | 'workable' | 'ashby' | null;
   board?: string;
   jobId?: string;
 }
@@ -36,6 +36,56 @@ export function detectAts(urlStr: string): AtsDetection {
         board: companyDomain,
         jobId,
       };
+    }
+
+    // Workable check:
+    // e.g. apply.workable.com/{account}/j/{SHORTCODE}
+    //      apply.workable.com/{account}/jobs/view/{SHORTCODE}(.md)
+    //      {account}.workable.com/j/{SHORTCODE}
+    if (host.includes('workable.com')) {
+      const parts = pathname.split('/').filter(Boolean);
+      // Hosted apply pages carry the account slug as the first path segment.
+      if (host.startsWith('apply.') || host === 'workable.com' || host === 'www.workable.com') {
+        const account = parts[0];
+        const jIdx = parts.indexOf('j');
+        const viewIdx = parts.indexOf('view');
+        const shortcode =
+          (jIdx !== -1 && parts[jIdx + 1]) ||
+          (viewIdx !== -1 && parts[viewIdx + 1]) ||
+          undefined;
+        if (account && shortcode) {
+          return {
+            type: 'workable',
+            board: account,
+            jobId: shortcode.replace(/\.md$/i, ''),
+          };
+        }
+      } else {
+        // Custom account subdomain: {account}.workable.com/j/{SHORTCODE}
+        const account = host.replace(/^www\./, '').split('.')[0];
+        const jIdx = parts.indexOf('j');
+        const shortcode = (jIdx !== -1 && parts[jIdx + 1]) || parts[parts.length - 1];
+        if (account && shortcode) {
+          return {
+            type: 'workable',
+            board: account,
+            jobId: shortcode.replace(/\.md$/i, ''),
+          };
+        }
+      }
+    }
+
+    // Ashby check:
+    // e.g. jobs.ashbyhq.com/{org}/{uuid}
+    if (host.includes('ashbyhq.com')) {
+      const parts = pathname.split('/').filter(Boolean);
+      if (parts[0]) {
+        return {
+          type: 'ashby',
+          board: parts[0],
+          jobId: parts[1] || undefined,
+        };
+      }
     }
 
     // Greenhouse check:

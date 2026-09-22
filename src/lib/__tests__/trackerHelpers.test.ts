@@ -56,6 +56,44 @@ describe('detectAts', () => {
     });
   });
 
+  it('detects Workable hosted apply URLs (/j/ shortcode)', () => {
+    expect(
+      detectAts('https://apply.workable.com/innovaccer-analytics/j/461A138133')
+    ).toEqual({
+      type: 'workable',
+      board: 'innovaccer-analytics',
+      jobId: '461A138133',
+    });
+  });
+
+  it('detects Workable /jobs/view/ markdown URLs', () => {
+    expect(
+      detectAts('https://apply.workable.com/innovaccer-analytics/jobs/view/461A138133.md')
+    ).toEqual({
+      type: 'workable',
+      board: 'innovaccer-analytics',
+      jobId: '461A138133',
+    });
+  });
+
+  it('detects Workable custom account subdomains', () => {
+    expect(detectAts('https://acme.workable.com/j/ABCDEF1234')).toEqual({
+      type: 'workable',
+      board: 'acme',
+      jobId: 'ABCDEF1234',
+    });
+  });
+
+  it('detects Ashby posting URLs', () => {
+    expect(
+      detectAts('https://jobs.ashbyhq.com/Overjet/3b74e8b2-0872-48a6-8995-663b944c89aa')
+    ).toEqual({
+      type: 'ashby',
+      board: 'Overjet',
+      jobId: '3b74e8b2-0872-48a6-8995-663b944c89aa',
+    });
+  });
+
   it('returns null for unknown career pages', () => {
     expect(detectAts('https://stripe.com/jobs/listing/staff-engineer/1')).toEqual({ type: null });
   });
