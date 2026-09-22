@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Application Easy Tracker</title>
+    <meta name="description" content="Autonomous job application tracking assistant that scrapes job postings, extracts structured attributes, and manages them in a persistent spreadsheet." />
+    <meta property="og:title" content="Job Application Easy Tracker" />
+    <meta property="og:description" content="Autonomous job application tracking assistant that scrapes job postings, extracts structured attributes, and manages them in a persistent spreadsheet." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('jat-theme');
+          var theme = raw ? JSON.parse(raw) : { mode: 'light', accent: 'indigo' };
+          var mode = theme.mode === 'dark' ? 'dark' : 'light';
+          var accents = { indigo: 1, teal: 1, amber: 1, rose: 1, emerald: 1 };
+          var accent = accents[theme.accent] ? theme.accent : 'indigo';
+          document.documentElement.dataset.mode = mode;
+          document.documentElement.dataset.accent = accent;
+          document.documentElement.style.colorScheme = mode;
+        } catch (e) {
+          document.documentElement.dataset.mode = 'light';
+          document.documentElement.dataset.accent = 'indigo';
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

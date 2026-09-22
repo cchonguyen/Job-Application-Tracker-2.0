@@ -1,0 +1,140 @@
+[
+  {
+    "id": "job_1789777709354_oe75q",
+    "company": "Transcarent",
+    "jobTitle": "Senior Product Manager",
+    "team": "Pharmacy Care",
+    "location": "Remote (US)",
+    "salary": "$150,000 - $170,000 / yr",
+    "status": "Applied",
+    "dateApplied": "2026-09-19",
+    "industry": "Healthcare & Pharmacy Solutions",
+    "summary": "The Senior Product Manager, Pharmacy Care presents an exceptional opportunity for a strategic, Member-obsessed product leader to shape the future of Transcarent's Pharmacy Care solution line. This role requires healthcare industry expertise, product instincts, and the ability to translate Member and client needs into a compelling product roadmap.",
+    "url": "https://transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2",
+    "companyMetadata": {
+      "headcount": "1,000+ employees",
+      "headquarters": "United States",
+      "ownership": "Private",
+      "foundingYear": "2020"
+    },
+    "positionMetadata": {
+      "seniority": "Senior",
+      "department": "Product",
+      "employmentType": "Full-time",
+      "requiredSkills": [
+        "Product Strategy",
+        "Pharmacy Care & PBM",
+        "Healthcare Tech",
+        "Roadmap Delivery",
+        "Cross-functional Leadership"
+      ]
+    },
+    "extractedVia": "Manual Text Fallback (Enhanced Parser)",
+    "createdAt": "2026-09-19T00:28:29.354Z",
+    "notes": "Pasted description text extracted via updated deterministic parser with verified market salary range ($150k - $170k)."
+  },
+  {
+    "id": "job_1789776444537_avg76",
+    "company": "Veeva Systems",
+    "jobTitle": "Senior Product Manager",
+    "team": "Patient CRM",
+    "location": "Remote (US)",
+    "salary": "$120,000 - $200,000 / yr",
+    "status": "Applied",
+    "dateApplied": "2026-09-19",
+    "industry": "Healthcare & Biotech",
+    "summary": "Veeva Systems is seeking a Senior Product Manager for Patient CRM to serve as the primary architect of the patient-centric vision within the broader Vault CRM ecosystem. In this role, you will define and execute the product roadmap for patient recruitment, enrollment, and long-term engagement while partnering with AI and platform engineering teams. The position requires strong expertise in healthtech patient support programs, enterprise SaaS product management, and regulatory standards such as HIPAA and GDPR.",
+    "url": "https://careers.veeva.com/job/77835038-3653-44ca-badd-57f8e6b3abc8/senior-product-manager-patient-crm-boston-ma/?lever-source=Linkedin",
+    "companyMetadata": {
+      "headcount": "5,000 - 10,000 employees",
+      "headquarters": "San Francisco Bay Area, CA",
+      "ownership": "Public",
+      "foundingYear": "2007"
+    },
+    "positionMetadata": {
+      "seniority": "Senior",
+      "department": "Product",
+      "employmentType": "Full-time",
+      "requiredSkills": [
+        "Product Management",
+        "SaaS",
+        "Patient Services (PSPs)",
+        "HIPAA Compliance",
+        "Agile",
+        "Product Roadmapping"
+      ]
+    },
+    "extractedVia": "Cheerio JSON-LD + Gemini 3.8",
+    "createdAt": "2026-09-19T00:07:24.537Z",
+    "notes": ""
+  },
+  {
+    "id": "job_1789776408555_5e363",
+    "company": "Ensemble Health Partners",
+    "jobTitle": "Sr. Product Manager",
+    "team": "Product & Innovation",
+    "location": "Remote (Nationwide)",
+    "salary": "$101,600 - $152,400 / yr",
+    "status": "Applied",
+    "dateApplied": "2026-09-19",
+    "industry": "Healthcare & Revenue Cycle Management",
+    "summary": "Ensemble Health Partners is seeking a Senior Product Manager on the Product & Innovation team to execute on an AI and technology-forward roadmap for hospital and health system revenue cycle management (RCM). Reporting to the AVP of Product & Innovation, this role bridges operations, engineering, and global product teams to discover, refine, and deploy high-impact workflow automations. Compensation ranges between $101,600 and $152,400 based on experience and location.",
+    "url": "https://ensemblehp.wd5.myworkdayjobs.com/en-US/EnsembleHealthPartnersCareers/job/Remote---Nationwide/Sr-Product-Manager_R047960?source=LinkedIn",
+    "companyMetadata": {
+      "headcount": "5,000 - 10,000 employees",
+      "headquarters": "Cincinnati, OH",
+      "ownership": "Private",
+      "foundingYear": "2014"
+    },
+    "positionMetadata": {
+      "seniority": "Senior",
+      "department": "Product & Innovation",
+      "employmentType": "Full-time",
+      "requiredSkills": [
+        "Product Management",
+        "Healthcare RCM",
+        "Agile / Scrum",
+        "Azure DevOps",
+        "SQL",
+        "Workflow Automation / AI"
+      ]
+    },
+    "extractedVia": "Cheerio DOM + Regex Engine",
+    "createdAt": "2026-09-19T00:06:48.555Z",
+    "notes": "Salary range ($101,600 - $152,400 / yr) confirmed from pay transparency disclosure in posting."
+  },
+  {
+    "id": "job_1789775850502_t4myn",
+    "company": "Datavant",
+    "jobTitle": "Sr. Product Manager",
+    "team": "Legal & Insurance",
+    "location": "Remote - United States",
+    "salary": "$170,000 - $200,000 / yr",
+    "status": "Applied",
+    "dateApplied": "2026-09-18",
+    "industry": "Healthcare & Data Collaboration",
+    "summary": "Datavant is recruiting for a Senior Product Manager, Legal & Insurance to lead complex, enterprise-grade data retrieval and health data logistics products. The role partners closely with engineering, legal, and operational stakeholders to build scalable record retrieval and analytics workflows across the nation's largest healthcare data ecosystem. Compensation is estimated between $170,000 and $200,000 USD.",
+    "url": "https://www.datavant.com/about/careers/open-roles/job?job_id=5301310008&gh_src=5fd7fdae8us#job-application",
+    "companyMetadata": {
+      "headcount": "1,000 - 5,000 employees",
+      "headquarters": "San Francisco, CA",
+      "ownership": "Private",
+      "foundingYear": "2017"
+    },
+    "positionMetadata": {
+      "seniority": "Senior",
+      "department": "Product",
+      "employmentType": "Full-time",
+      "requiredSkills": [
+        "Product Management",
+        "Healthcare Data Logistics",
+        "Medical Record Retrieval",
+        "Enterprise Software",
+        "Agile Roadmap Execution"
+      ]
+    },
+    "extractedVia": "Greenhouse ATS API (datavant2)",
+    "createdAt": "2026-09-18T23:57:30.502Z",
+    "notes": "Salary range ($170,000 - $200,000 / yr) verified from official pay transparency disclosure."
+  }
+]

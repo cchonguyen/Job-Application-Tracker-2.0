@@ -1,0 +1,6 @@
+{
+  "name": "Job Application Easy Tracker",
+  "description": "Autonomous job application tracking assistant that scrapes job postings, extracts structured attributes, and manages them in a persistent spreadsheet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
