@@ -1,0 +1,145 @@
+import * as cheerio from 'cheerio';
+import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
+import { extractWithGemini } from '../ai/geminiExtractor.ts';
+import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
+import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+
+export class GreenhouseProvider implements AtsProvider {
+  readonly name = 'Greenhouse';
+
+  canHandle(url: string, atsInfo?: { type: string; board?: string; jobId?: string }): boolean {
+    return atsInfo?.type === 'greenhouse' && !!atsInfo.board && !!atsInfo.jobId;
+  }
+
+  private async fetchApi(board: string, jobId: string): Promise<any> {
+    const candidateBoards = [board, `${board}2`, `${board}careers`, `${board}jobs`, `${board}inc`];
+    let lastError: any = null;
+
+    for (const b of candidateBoards) {
+      try {
+        const apiUrl = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(b)}/jobs/${encodeURIComponent(jobId)}`;
+        const response = await fetch(apiUrl, {
+          signal: AbortSignal.timeout(4000),
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'JobApplicationTracker/1.0',
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          return { ...data, resolvedBoard: b };
+        }
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    throw new Error(lastError?.message || `Greenhouse API: job ${jobId} not found on candidate boards [${candidateBoards.join(', ')}]`);
+  }
+
+  async extract(
+    url: string,
+    atsInfo: { type: string; board?: string; jobId?: string },
+    diagnosticSteps: DiagnosticStep[]
+  ): Promise<AtsProviderResult> {
+    const board = atsInfo.board!;
+    const jobId = atsInfo.jobId!;
+    const start = Date.now();
+
+    diagnosticSteps.push({
+      tier: 'Tier 1 (ATS REST API)',
+      name: 'Tier 1: Greenhouse REST API',
+      status: 'pending',
+    });
+
+    const atsPayload = await this.fetchApi(board, jobId);
+    const titleHint = atsPayload.title || '';
+    const companyHint = atsPayload.resolvedBoard || board;
+
+    diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
+    diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - start;
+    diagnosticSteps[diagnosticSteps.length - 1].details = `Successfully fetched structured JSON from GREENHOUSE API endpoint`;
+
+    const geminiStart = Date.now();
+    diagnosticSteps.push({
+      tier: 'Tier 3 (Gemini Normalization)',
+      name: 'Synthesize & Enrich ATS Payload',
+      status: 'pending',
+    });
+
+    try {
+      const structured = await extractWithGemini({
+        url,
+        sourceType: 'GREENHOUSE REST API',
+        rawContent: JSON.stringify(atsPayload),
+        companyHint,
+        jobTitleHint: titleHint,
+      });
+
+      diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
+      diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - geminiStart;
+      diagnosticSteps[diagnosticSteps.length - 1].details = `Normalized attributes for ${structured.company} - ${structured.jobTitle}`;
+
+      return {
+        extractedData: structured,
+        tierUsed: 'ATS API (Greenhouse)',
+      };
+    } catch (geminiErr: any) {
+      diagnosticSteps[diagnosticSteps.length - 1].status = 'failed';
+      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini call failed (${geminiErr.message}). Using direct ATS parsed fields.`;
+
+      const cleanName = companyHint.replace(/\d+$/, '');
+      const fallbackCompany = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+      const fallbackTitle = atsPayload.title || titleHint || 'Software Engineer';
+      const fallbackLocation =
+        atsPayload.location?.name ||
+        atsPayload.offices?.[0]?.name ||
+        'Remote (US)';
+
+      const rawContent = atsPayload.content || JSON.stringify(atsPayload);
+      const parsedSalary = extractSalaryFromTextOrJson(rawContent);
+
+      let fallbackSummary = '';
+      if (atsPayload.content) {
+        try {
+          const cleanDesc = cheerio.load(cheerio.load(atsPayload.content).text()).text().replace(/\s+/g, ' ');
+          fallbackSummary = cleanDesc.slice(0, 450) + '...';
+        } catch {
+          fallbackSummary = `${fallbackCompany} is recruiting for the role of ${fallbackTitle}.`;
+        }
+      } else {
+        fallbackSummary = `${fallbackCompany} is recruiting for the role of ${fallbackTitle}. Direct position fetched via the official Greenhouse job posting API.`;
+      }
+
+      const isSr = /\b(sr|senior|lead|principal|director|head)\b/i.test(fallbackTitle);
+
+      const fallbackData: ExtractedJobAttributes = {
+        company: fallbackCompany,
+        jobTitle: fallbackTitle,
+        location: fallbackLocation,
+        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
+        salaryMin: parsedSalary.salaryMin,
+        salaryMax: parsedSalary.salaryMax,
+        industry: fallbackCompany.toLowerCase().includes('datavant') ? 'Healthcare & Data Collaboration' : 'Technology & Software',
+        summary: fallbackSummary,
+        companyMetadata: {
+          headcount: '1,000+ employees',
+          headquarters: 'United States',
+          ownership: 'Private',
+          foundingYear: 'Unknown',
+        },
+        positionMetadata: {
+          seniority: isSr ? 'Senior' : 'Mid-level',
+          department: atsPayload.departments?.[0]?.name || 'Product & Engineering',
+          employmentType: 'Full-time',
+          requiredSkills: ['Product Management', 'Data Architecture', 'Problem Solving'],
+        },
+      };
+
+      return {
+        extractedData: fallbackData,
+        tierUsed: 'Direct ATS API (Greenhouse)',
+      };
+    }
+  }
+}

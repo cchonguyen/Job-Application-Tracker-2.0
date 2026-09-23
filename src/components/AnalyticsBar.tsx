@@ -52,9 +52,9 @@ export const AnalyticsBar = ({ jobs, onSelectJob }: AnalyticsBarProps) => {
   const total = jobs.length;
 
   return (
-    <div className="analytics-panel bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs transition-all">
+    <div className="analytics-panel bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs transition-all">
       {/* Header bar */}
-      <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-5 py-3.5 bg-slate-50/80 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
             <TrendingUp className="w-4 h-4" />

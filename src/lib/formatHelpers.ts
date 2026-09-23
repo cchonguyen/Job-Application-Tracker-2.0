@@ -225,11 +225,11 @@ export function getStatusBorderAccent(status: JobStatus): string {
     case 'Saved':
       return 'border-l-slate-400';
     case 'Applied':
-      return 'border-l-indigo-500';
-    case 'Interviewing':
       return 'border-l-amber-500';
+    case 'Interviewing':
+      return 'border-l-blue-600';
     case 'Offer':
-      return 'border-l-emerald-500';
+      return 'border-l-purple-600';
     case 'Accepted':
       return 'border-l-teal-500';
     case 'Rejected':
@@ -249,11 +249,11 @@ export function getStatusDotColor(status: JobStatus): string {
     case 'Saved':
       return 'bg-slate-400';
     case 'Applied':
-      return 'bg-indigo-500';
-    case 'Interviewing':
       return 'bg-amber-500';
+    case 'Interviewing':
+      return 'bg-blue-600';
     case 'Offer':
-      return 'bg-emerald-500';
+      return 'bg-purple-600';
     case 'Accepted':
       return 'bg-teal-500';
     case 'Rejected':

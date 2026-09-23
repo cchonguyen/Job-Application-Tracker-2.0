@@ -23,8 +23,14 @@ export interface StatusMeta {
 }
 
 /**
- * Applied uses indigo-* so Theme accent remapping visibly affects the pipeline.
- * Other statuses keep semantic colors (amber/emerald/rose).
+ * Status color mappings:
+ * - Applied: Gold (amber-500)
+ * - Interviewing: Blue (blue-600)
+ * - Offer: Purple (purple-600)
+ * - Accepted: Teal (teal-600)
+ * - Saved: Slate (slate-500)
+ * - Rejected: Rose (rose-600)
+ * - Declined: Stone (stone-600)
  */
 export const STATUS_META: Record<JobStatus, StatusMeta> = {
   Saved: {
@@ -39,25 +45,25 @@ export const STATUS_META: Record<JobStatus, StatusMeta> = {
     value: 'Applied',
     label: 'Applied',
     icon: Send,
-    badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    iconClass: 'text-indigo-600',
-    chipBg: 'bg-indigo-50 border-indigo-200',
+    badge: 'bg-amber-50 text-amber-800 border-amber-300',
+    iconClass: 'text-amber-500',
+    chipBg: 'bg-amber-50 border-amber-200',
   },
   Interviewing: {
     value: 'Interviewing',
     label: 'Interviewing',
     icon: Calendar,
-    badge: 'bg-amber-50 text-amber-700 border-amber-200',
-    iconClass: 'text-amber-600',
-    chipBg: 'bg-amber-50 border-amber-200',
+    badge: 'bg-blue-50 text-blue-700 border-blue-200',
+    iconClass: 'text-blue-600',
+    chipBg: 'bg-blue-50 border-blue-200',
   },
   Offer: {
     value: 'Offer',
     label: 'Offer',
     icon: Award,
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    iconClass: 'text-emerald-600',
-    chipBg: 'bg-emerald-50 border-emerald-200',
+    badge: 'bg-purple-50 text-purple-700 border-purple-200',
+    iconClass: 'text-purple-600',
+    chipBg: 'bg-purple-50 border-purple-200',
   },
   Accepted: {
     value: 'Accepted',
@@ -102,27 +108,19 @@ export const STATUS_ORDER: JobStatus[] = [
 ];
 
 /**
- * Default visible statuses in multi-select filter:
- * Rejected and Declined are hidden (unchecked) by default.
+ * Default visible statuses in the spreadsheet.
+ * Includes all active pipeline stages; excludes closed stages by default.
  */
 export const DEFAULT_VISIBLE_STATUSES: JobStatus[] = [
-  'Accepted',
-  'Offer',
-  'Interviewing',
   'Applied',
+  'Interviewing',
+  'Offer',
   'Saved',
 ];
 
-export const STATUS_TIER_RANK: Record<JobStatus, number> = {
-  Accepted: 1,
-  Offer: 2,
-  Interviewing: 3,
-  Applied: 4,
-  Saved: 5,
-  Rejected: 6,
-  Declined: 7,
-};
-
+/**
+ * Convenience helper to get StatusMeta with a safe fallback to Saved.
+ */
 export function getStatusMeta(status: JobStatus): StatusMeta {
   return STATUS_META[status] || STATUS_META.Saved;
 }
