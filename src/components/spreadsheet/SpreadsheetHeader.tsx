@@ -139,7 +139,7 @@ export const SpreadsheetHeader = ({
         )}
 
         {/* Actions */}
-        <th className={`py-3 text-right whitespace-nowrap ${isCompact ? 'w-20 px-1' : 'w-[100px] px-2'}`}>
+        <th className={`py-3 text-right whitespace-nowrap ${isCompact ? 'w-16 px-1' : 'w-[76px] px-2'}`}>
           <span className="sr-only sm:not-sr-only">Actions</span>
         </th>
       </tr>

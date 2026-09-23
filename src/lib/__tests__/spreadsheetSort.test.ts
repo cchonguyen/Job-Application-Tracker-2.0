@@ -3,7 +3,10 @@ import {
   getNextSortState,
   DEFAULT_SORT_FIELD,
   DEFAULT_SORT_ORDER,
+  STATUS_PRIORITY_ORDER,
+  compareJobsForSpreadsheet,
 } from '../../components/spreadsheet/useSpreadsheetFilter';
+import { JobRecord } from '../../types';
 
 describe('Spreadsheet 3-click sort cycle and reset', () => {
   it('starts at default setting: dateApplied desc', () => {
@@ -83,3 +86,148 @@ describe('Spreadsheet 3-click sort cycle and reset', () => {
     expect(fromCompany).toEqual({ field: 'dateApplied', order: 'desc' });
   });
 });
+
+describe('Status priority grouping and age sorting in table view', () => {
+  const makeJob = (partial: Partial<JobRecord>): JobRecord => ({
+    id: 'job_' + Math.random().toString(36).slice(2),
+    company: 'Acme',
+    jobTitle: 'Software Engineer',
+    location: 'Remote',
+    salary: '120k',
+    salaryMin: 120000,
+    salaryMax: 150000,
+    status: 'Applied',
+    dateApplied: '2026-09-15',
+    dateAdded: '2026-09-15',
+    createdAt: '2026-09-15T00:00:00.000Z',
+    industry: 'Tech',
+    summary: 'A job',
+    url: 'https://example.com/job',
+    notes: '',
+    companyMetadata: {},
+    positionMetadata: { requiredSkills: [] },
+    ...partial,
+  });
+
+  it('enforces exact status order: Accepted, Offer, Interviewing, Applied, Saved', () => {
+    expect(STATUS_PRIORITY_ORDER['Accepted']).toBeLessThan(STATUS_PRIORITY_ORDER['Offer']);
+    expect(STATUS_PRIORITY_ORDER['Offer']).toBeLessThan(STATUS_PRIORITY_ORDER['Interviewing']);
+    expect(STATUS_PRIORITY_ORDER['Interviewing']).toBeLessThan(STATUS_PRIORITY_ORDER['Applied']);
+    expect(STATUS_PRIORITY_ORDER['Applied']).toBeLessThan(STATUS_PRIORITY_ORDER['Saved']);
+    expect(STATUS_PRIORITY_ORDER['Saved']).toBeLessThan(STATUS_PRIORITY_ORDER['Rejected']);
+    expect(STATUS_PRIORITY_ORDER['Rejected']).toBeLessThan(STATUS_PRIORITY_ORDER['Declined']);
+  });
+
+  it('shows Interviewing above Applied even if Applied is newer', () => {
+    const appliedJob = makeJob({
+      company: 'New Applied Corp',
+      status: 'Applied',
+      dateApplied: '2026-09-22', // Applied yesterday
+    });
+
+    const interviewingJob = makeJob({
+      company: 'Older Interviewing Inc',
+      status: 'Interviewing',
+      dateApplied: '2026-09-01', // Applied 3 weeks ago
+    });
+
+    const jobs = [appliedJob, interviewingJob];
+    const sorted = [...jobs].sort((a, b) => compareJobsForSpreadsheet(a, b, 'dateApplied', 'desc'));
+
+    expect(sorted[0].company).toBe('Older Interviewing Inc');
+    expect(sorted[1].company).toBe('New Applied Corp');
+  });
+
+  it('sorts a complete pipeline in order: Accepted -> Offer -> Interviewing -> Applied -> Saved', () => {
+    const saved = makeJob({ company: 'Saved Co', status: 'Saved', dateAdded: '2026-09-20' });
+    const applied = makeJob({ company: 'Applied Co', status: 'Applied', dateApplied: '2026-09-18' });
+    const interviewing = makeJob({ company: 'Interviewing Co', status: 'Interviewing', dateApplied: '2026-09-10' });
+    const offer = makeJob({ company: 'Offer Co', status: 'Offer', dateApplied: '2026-09-05' });
+    const accepted = makeJob({ company: 'Accepted Co', status: 'Accepted', dateApplied: '2026-09-01' });
+
+    const mixed = [saved, applied, interviewing, offer, accepted];
+    const sorted = [...mixed].sort((a, b) => compareJobsForSpreadsheet(a, b, 'dateApplied', 'desc'));
+
+    expect(sorted.map((j) => j.status)).toEqual([
+      'Accepted',
+      'Offer',
+      'Interviewing',
+      'Applied',
+      'Saved',
+    ]);
+  });
+
+  it('orders by age in each grouping (newest/youngest first by default)', () => {
+    const appliedOld = makeJob({
+      company: 'Old Applied',
+      status: 'Applied',
+      dateApplied: '2026-09-01',
+    });
+    const appliedNew = makeJob({
+      company: 'New Applied',
+      status: 'Applied',
+      dateApplied: '2026-09-20',
+    });
+
+    const interviewingOld = makeJob({
+      company: 'Old Interviewing',
+      status: 'Interviewing',
+      dateApplied: '2026-08-15',
+    });
+    const interviewingNew = makeJob({
+      company: 'New Interviewing',
+      status: 'Interviewing',
+      dateApplied: '2026-09-10',
+    });
+
+    const mixed = [appliedOld, interviewingOld, appliedNew, interviewingNew];
+    const sorted = [...mixed].sort((a, b) => compareJobsForSpreadsheet(a, b, 'dateApplied', 'desc'));
+
+    // Status: Interviewing first (both), then Applied (both).
+    // Within Interviewing: New Interviewing before Old Interviewing.
+    // Within Applied: New Applied before Old Applied.
+    expect(sorted.map((j) => j.company)).toEqual([
+      'New Interviewing',
+      'Old Interviewing',
+      'New Applied',
+      'Old Applied',
+    ]);
+  });
+
+  it('orders by age oldest first when sortOrder is asc in each grouping', () => {
+    const appliedOld = makeJob({
+      company: 'Old Applied',
+      status: 'Applied',
+      dateApplied: '2026-09-01',
+    });
+    const appliedNew = makeJob({
+      company: 'New Applied',
+      status: 'Applied',
+      dateApplied: '2026-09-20',
+    });
+
+    const interviewingOld = makeJob({
+      company: 'Old Interviewing',
+      status: 'Interviewing',
+      dateApplied: '2026-08-15',
+    });
+    const interviewingNew = makeJob({
+      company: 'New Interviewing',
+      status: 'Interviewing',
+      dateApplied: '2026-09-10',
+    });
+
+    const mixed = [appliedOld, interviewingOld, appliedNew, interviewingNew];
+    const sorted = [...mixed].sort((a, b) => compareJobsForSpreadsheet(a, b, 'dateApplied', 'asc'));
+
+    // Status order is still Interviewing first, then Applied.
+    // But within each group: oldest first!
+    expect(sorted.map((j) => j.company)).toEqual([
+      'Old Interviewing',
+      'New Interviewing',
+      'Old Applied',
+      'New Applied',
+    ]);
+  });
+});
+

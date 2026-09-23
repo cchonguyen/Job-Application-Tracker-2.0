@@ -92,7 +92,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-x-hidden max-w-full">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-x-clip max-w-full">
       {/* Toast Notification */}
       {toast && (
         <div

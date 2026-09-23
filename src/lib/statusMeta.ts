@@ -112,9 +112,10 @@ export const STATUS_ORDER: JobStatus[] = [
  * Includes all active pipeline stages; excludes closed stages by default.
  */
 export const DEFAULT_VISIBLE_STATUSES: JobStatus[] = [
-  'Applied',
-  'Interviewing',
+  'Accepted',
   'Offer',
+  'Interviewing',
+  'Applied',
   'Saved',
 ];
 

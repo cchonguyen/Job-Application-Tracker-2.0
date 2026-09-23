@@ -160,6 +160,15 @@ export const SpreadsheetRow = ({
     }
   };
 
+  const handleRowClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
+    const target = e.target as HTMLElement;
+    // Don't trigger if clicked on an action button, anchor, input, or inside a portal dropdown
+    if (target.closest('button, a, input, select, textarea, [data-portal-dropdown]')) {
+      return;
+    }
+    onSelectJob(job);
+  };
+
   return (
     <motion.tr
       layout
@@ -167,7 +176,8 @@ export const SpreadsheetRow = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.12 }}
-      className="group hover:bg-slate-50/80 transition-colors border-b border-slate-100"
+      onClick={handleRowClick}
+      className="group hover:bg-slate-50/80 transition-colors border-b border-slate-100 cursor-pointer"
     >
       {/* Col 0: Status Icon Only (Clean icon, no text or bubble format) */}
       <td className={`py-2.5 whitespace-nowrap text-center ${isCompact ? 'w-9 px-1' : 'w-[44px] px-2'}`}>
@@ -330,7 +340,7 @@ export const SpreadsheetRow = ({
       )}
 
       {/* Col: Actions */}
-      <td className={`py-2.5 text-right whitespace-nowrap ${isCompact ? 'w-20 px-1' : 'w-[100px] px-2'}`}>
+      <td className={`py-2.5 text-right whitespace-nowrap ${isCompact ? 'w-16 px-1' : 'w-[76px] px-2'}`}>
         <div className="flex items-center justify-end gap-1">
           {job.url && (
             <a
@@ -343,15 +353,6 @@ export const SpreadsheetRow = ({
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
-
-          <button
-            type="button"
-            onClick={() => onSelectJob(job)}
-            title="Inspect job details & notes"
-            className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors inline-flex items-center justify-center cursor-pointer"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
 
           <button
             type="button"

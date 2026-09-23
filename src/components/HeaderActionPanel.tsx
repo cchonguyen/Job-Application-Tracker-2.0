@@ -112,7 +112,7 @@ export const HeaderActionPanel = ({
   const ActiveStatusIcon = activeStatusOption.icon;
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs will-change-transform transform-gpu pt-[env(safe-area-inset-top,0px)]">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 space-y-2.5">
         {/* Top App Bar: Hero Branding + Unified Utility Menu */}
         <div className="flex items-center justify-between gap-3">

@@ -210,7 +210,7 @@ export function getCompactTimeline(job: JobRecord): {
   ageText: string;
   stateDurationText: string;
 } {
-  const addedDate = job.dateAdded || job.createdAt;
+  const addedDate = job.dateApplied || job.dateAdded || job.createdAt;
   const ageText = formatRelativeTime(addedDate);
   const stateDurationText = formatStateDuration(job.statusHistory, job.createdAt, job.status);
 
@@ -300,7 +300,7 @@ export function getStatusDurationMs(job: JobRecord): number {
  * Used for ranking youngest to oldest (youngest = highest timestamp first).
  */
 export function getJobAgeTimestampMs(job: JobRecord): number {
-  const raw = job.createdAt || job.dateApplied || job.dateAdded;
+  const raw = job.dateApplied || job.dateAdded || job.createdAt;
   if (!raw) return 0;
   try {
     const d = new Date(raw);

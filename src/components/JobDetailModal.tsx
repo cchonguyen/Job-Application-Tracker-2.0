@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import {
   X,
   Building2,
@@ -63,6 +63,21 @@ export const JobDetailModal = ({
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isSavingDate, setIsSavingDate] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const dragControls = useDragControls();
+
+  // Prevent background layer from moving/scrolling on mobile while modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (job) {
@@ -100,7 +115,7 @@ export const JobDetailModal = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs cursor-pointer"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs cursor-pointer touch-none"
             onClick={onClose}
           />
 
@@ -110,15 +125,36 @@ export const JobDetailModal = ({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.7 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 90 || info.velocity.y > 350) {
+                onClose();
+              }
+            }}
             className="relative bg-white rounded-t-3xl sm:rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[90dvh] sm:max-h-[92vh] flex flex-col pb-[env(safe-area-inset-bottom)] z-10"
           >
             {/* Mobile Drag Handle */}
-            <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-slate-50 border-b border-slate-100">
-              <div className="w-12 h-1.5 bg-slate-300 rounded-full select-none" />
+            <div
+              className="sm:hidden pt-3 pb-2.5 px-6 flex justify-center bg-slate-50 border-b border-slate-100 cursor-grab active:cursor-grabbing touch-none select-none"
+              onPointerDown={(e) => dragControls.start(e)}
+            >
+              <div className="w-12 h-1.5 bg-slate-300 hover:bg-slate-400 rounded-full transition-colors" />
             </div>
 
             {/* Header */}
-            <div className="shrink-0 px-4 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 border-b border-slate-200 bg-slate-50 space-y-2.5">
+            <div
+              className="shrink-0 px-4 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 border-b border-slate-200 bg-slate-50 space-y-2.5"
+              onPointerDown={(e) => {
+                const target = e.target as HTMLElement;
+                if (!target.closest('button, select, input, a, textarea')) {
+                  dragControls.start(e);
+                }
+              }}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2.5 min-w-0 flex-1">
                   <CompanyLogo

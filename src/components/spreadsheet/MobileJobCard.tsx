@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
 import {
   ExternalLink,
-  Eye,
   Edit2,
   Trash2,
   Clock,
@@ -70,8 +69,19 @@ export const MobileJobCard = ({
       ? 'text-amber-500'
       : 'text-slate-400';
 
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, select, textarea, [data-portal-dropdown]')) {
+      return;
+    }
+    onSelectJob(job);
+  };
+
   return (
-    <div className="p-3.5 bg-white hover:bg-slate-50/70 transition-colors border-b border-slate-100 flex flex-col gap-2.5">
+    <div
+      onClick={handleCardClick}
+      className="p-3.5 bg-white hover:bg-slate-50/70 transition-colors border-b border-slate-100 flex flex-col gap-2.5 cursor-pointer"
+    >
       {/* Top Header: Logo, Company on top, Role + Team below, and Status Icon on Right */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5 min-w-0 flex-1">
@@ -204,7 +214,7 @@ export const MobileJobCard = ({
 
       {/* Bottom Row: Direct Action Buttons with touch targets */}
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {job.url && (
             <a
               href={job.url}
@@ -216,14 +226,6 @@ export const MobileJobCard = ({
               <span>Link</span>
             </a>
           )}
-          <button
-            type="button"
-            onClick={() => onSelectJob(job)}
-            className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50/50 rounded-lg border border-slate-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <Eye className="w-3 h-3 text-slate-400" />
-            <span>Details</span>
-          </button>
           <button
             type="button"
             onClick={() => onEditJob(job)}

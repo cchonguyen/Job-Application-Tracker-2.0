@@ -45,6 +45,9 @@ export const PortalDropdown = ({
       const estimatedHeight = dropdownRef.current?.scrollHeight || 240;
       const shouldFlipUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
 
+      // Estimate or measure dropdown width
+      const dropdownWidth = dropdownRef.current?.offsetWidth || 240;
+
       let top: number | undefined;
       let bottom: number | undefined;
       let maxHeight: number;
@@ -63,9 +66,21 @@ export const PortalDropdown = ({
       let right: number | undefined;
 
       if (align === 'right') {
-        right = Math.max(8, viewportWidth - rect.right);
+        // If aligning to right edge of trigger would cause dropdown to bleed off left screen edge
+        if (rect.right - dropdownWidth < 8) {
+          left = Math.max(8, Math.min(rect.left, viewportWidth - dropdownWidth - 8));
+          right = undefined;
+        } else {
+          right = Math.max(8, viewportWidth - rect.right);
+        }
       } else {
-        left = Math.max(8, rect.left);
+        // If aligning to left edge of trigger would cause dropdown to bleed off right screen edge
+        if (rect.left + dropdownWidth > viewportWidth - 8) {
+          right = Math.max(8, Math.min(viewportWidth - rect.right, viewportWidth - dropdownWidth - 8));
+          left = undefined;
+        } else {
+          left = Math.max(8, rect.left);
+        }
       }
 
       setCoords({ top, bottom, left, right, maxHeight });
@@ -117,6 +132,7 @@ export const PortalDropdown = ({
   return createPortal(
     <div
       ref={dropdownRef}
+      data-portal-dropdown="true"
       style={{
         position: 'fixed',
         top: coords.top !== undefined ? `${coords.top}px` : undefined,
@@ -127,7 +143,7 @@ export const PortalDropdown = ({
         overflowY: 'auto',
         zIndex: 9999,
       }}
-      className={`bg-white border border-slate-200 rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-100 ${className}`}
+      className={`bg-white border border-slate-200 rounded-xl shadow-xl max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-100 ${className}`}
     >
       {children}
     </div>,
