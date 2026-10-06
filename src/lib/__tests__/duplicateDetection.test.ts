@@ -1,0 +1,212 @@
+import { describe, expect, it } from 'vitest';
+import {
+  normalizeCompany,
+  isCompanyMatch,
+  normalizeRole,
+  isRoleMatch,
+  isAppliedWithinPastMonths,
+  findPastSixMonthsDuplicates,
+  formatTimeAgo,
+} from '../duplicateDetection';
+import type { JobRecord } from '../../types';
+
+describe('duplicateDetection', () => {
+  const refDate = new Date('2026-10-06T12:00:00Z');
+
+  describe('normalizeCompany & isCompanyMatch', () => {
+    it('normalizes corporate suffixes and casing', () => {
+      expect(normalizeCompany('Stripe, Inc.')).toBe('stripe');
+      expect(normalizeCompany('Airbnb LLC')).toBe('airbnb');
+      expect(normalizeCompany('The New York Times Company')).toBe('new york times');
+      expect(normalizeCompany('Veeva Systems')).toBe('veeva');
+    });
+
+    it('matches companies with legal suffixes', () => {
+      expect(isCompanyMatch('Stripe', 'Stripe, Inc.')).toBe(true);
+      expect(isCompanyMatch('Airbnb LLC', 'Airbnb')).toBe(true);
+      expect(isCompanyMatch('Google', 'Google LLC')).toBe(true);
+      expect(isCompanyMatch('Veeva Systems', 'Veeva')).toBe(true);
+    });
+
+    it('rejects completely different companies', () => {
+      expect(isCompanyMatch('Apple', 'Applied Materials')).toBe(false);
+      expect(isCompanyMatch('Microsoft', 'MicroStrategy')).toBe(false);
+      expect(isCompanyMatch('Amazon', 'Target')).toBe(false);
+    });
+  });
+
+  describe('normalizeRole & isRoleMatch', () => {
+    it('normalizes role title by removing noise brackets', () => {
+      expect(normalizeRole('Senior Software Engineer (Remote)')).toBe('senior software engineer');
+      expect(normalizeRole('Staff Product Manager [Hybrid - US]')).toBe('staff product manager');
+    });
+
+    it('matches identical and minor variant roles', () => {
+      expect(
+        isRoleMatch('Senior Software Engineer', 'Senior Software Engineer (Remote)')
+      ).toBe(true);
+      expect(
+        isRoleMatch('Staff Product Manager', 'Staff Product Manager')
+      ).toBe(true);
+      expect(
+        isRoleMatch('Product Manager', 'Chief Financial Officer')
+      ).toBe(false);
+    });
+  });
+
+  describe('isAppliedWithinPastMonths', () => {
+    it('returns true for jobs applied within 6 months', () => {
+      const recentJob: JobRecord = {
+        id: 'job-1',
+        company: 'Stripe',
+        jobTitle: 'Software Engineer',
+        location: 'Remote',
+        salary: '$150k',
+        status: 'Applied',
+        dateApplied: '2026-08-15',
+        industry: 'Tech',
+        summary: '',
+        url: '',
+        companyMetadata: {},
+        positionMetadata: { requiredSkills: [] },
+        createdAt: '2026-08-15T00:00:00Z',
+      };
+      expect(isAppliedWithinPastMonths(recentJob, 6, refDate)).toBe(true);
+    });
+
+    it('returns false for jobs applied 8 months ago', () => {
+      const oldJob: JobRecord = {
+        id: 'job-2',
+        company: 'Stripe',
+        jobTitle: 'Software Engineer',
+        location: 'Remote',
+        salary: '$150k',
+        status: 'Applied',
+        dateApplied: '2026-01-10', // 9 months ago relative to 2026-10-06
+        industry: 'Tech',
+        summary: '',
+        url: '',
+        companyMetadata: {},
+        positionMetadata: { requiredSkills: [] },
+        createdAt: '2026-01-10T00:00:00Z',
+      };
+      expect(isAppliedWithinPastMonths(oldJob, 6, refDate)).toBe(false);
+    });
+
+    it('returns false for purely Saved jobs with no dateApplied', () => {
+      const savedJob: JobRecord = {
+        id: 'job-3',
+        company: 'Stripe',
+        jobTitle: 'Software Engineer',
+        location: 'Remote',
+        salary: '$150k',
+        status: 'Saved',
+        dateApplied: null,
+        industry: 'Tech',
+        summary: '',
+        url: '',
+        companyMetadata: {},
+        positionMetadata: { requiredSkills: [] },
+        createdAt: '2026-09-01T00:00:00Z',
+      };
+      expect(isAppliedWithinPastMonths(savedJob, 6, refDate)).toBe(false);
+    });
+  });
+
+  describe('findPastSixMonthsDuplicates', () => {
+    const existingJobs: JobRecord[] = [
+      {
+        id: 'job-veeva',
+        company: 'Veeva Systems',
+        jobTitle: 'Senior Product Manager',
+        location: 'Remote (US)',
+        salary: '$120,000 - $200,000',
+        status: 'Interviewing',
+        dateApplied: '2026-09-19', // ~17 days ago
+        industry: 'Healthcare Tech',
+        summary: '',
+        url: 'https://careers.veeva.com/job/123',
+        companyMetadata: {},
+        positionMetadata: { requiredSkills: [] },
+        createdAt: '2026-09-19T00:00:00Z',
+      },
+      {
+        id: 'job-old-meta',
+        company: 'Meta',
+        jobTitle: 'Staff Software Engineer',
+        location: 'Menlo Park, CA',
+        salary: '$250k',
+        status: 'Rejected',
+        dateApplied: '2025-10-01', // 1 year ago (outside 6 months)
+        industry: 'Tech',
+        summary: '',
+        url: 'https://meta.com/job/456',
+        companyMetadata: {},
+        positionMetadata: { requiredSkills: [] },
+        createdAt: '2025-10-01T00:00:00Z',
+      },
+    ];
+
+    it('flags duplicate company and role applied within 6 months', () => {
+      const candidate = {
+        company: 'Veeva Systems',
+        jobTitle: 'Senior Product Manager',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
+      expect(duplicates.length).toBe(1);
+      expect(duplicates[0].matchType).toBe('both');
+      expect(duplicates[0].existingJob.company).toBe('Veeva Systems');
+      expect(duplicates[0].daysAgo).toBe(17);
+    });
+
+    it('flags duplicate company even if role is different', () => {
+      const candidate = {
+        company: 'Veeva',
+        jobTitle: 'Director of Product Management',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
+      expect(duplicates.length).toBe(1);
+      expect(duplicates[0].matchType).toBe('company');
+      expect(duplicates[0].matchedFields).toContain('company');
+    });
+
+    it('flags duplicate role even if company is different', () => {
+      const candidate = {
+        company: 'Acme Health',
+        jobTitle: 'Senior Product Manager',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
+      expect(duplicates.length).toBe(1);
+      expect(duplicates[0].matchType).toBe('role');
+      expect(duplicates[0].matchedFields).toContain('role');
+    });
+
+    it('does NOT flag jobs applied outside past 6 months', () => {
+      const candidate = {
+        company: 'Meta Platforms',
+        jobTitle: 'Staff Software Engineer',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
+      expect(duplicates.length).toBe(0);
+    });
+
+    it('does not flag completely distinct jobs', () => {
+      const candidate = {
+        company: 'Netflix',
+        jobTitle: 'Data Engineer',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
+      expect(duplicates.length).toBe(0);
+    });
+  });
+
+  describe('formatTimeAgo', () => {
+    it('formats days ago correctly', () => {
+      expect(formatTimeAgo(0)).toBe('today');
+      expect(formatTimeAgo(1)).toBe('yesterday');
+      expect(formatTimeAgo(17)).toBe('17 days ago');
+      expect(formatTimeAgo(35)).toBe('1 month ago');
+      expect(formatTimeAgo(95)).toBe('3 months ago');
+    });
+  });
+});

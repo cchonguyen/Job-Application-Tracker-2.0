@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { JobRecord, JobStatus } from '../types';
+import { JobRecord, JobStatus, PendingDuplicateCandidate } from '../types';
 
 interface SafeFetchOptions extends RequestInit {}
 
@@ -29,6 +29,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
   const [isLoading, setIsLoading] = useState(true);
   const [isIngesting, setIsIngesting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicateCandidate | null>(null);
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -52,11 +53,13 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
     manualText,
     status,
     notes,
+    confirmDuplicate,
   }: {
     url?: string;
     manualText?: string;
     status?: JobStatus;
     notes?: string;
+    confirmDuplicate?: boolean;
   }) => {
     setIsIngesting(true);
     try {
@@ -64,15 +67,31 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
         success: boolean;
         job?: JobRecord;
         tierUsed?: string;
+        potentialDuplicate?: boolean;
+        candidateJob?: JobRecord;
+        duplicates?: any[];
         error?: string;
       }>('/api/extract-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, manualText, status, notes }),
+        body: JSON.stringify({ url, manualText, status, notes, confirmDuplicate }),
       });
+
+      if (data.success && data.potentialDuplicate && data.candidateJob && Array.isArray(data.duplicates)) {
+        setPendingDuplicate({
+          candidateJob: data.candidateJob,
+          duplicates: data.duplicates,
+        });
+        showToast(
+          `Potential duplicate flagged: applied in the past 6 months. Review comparison to proceed.`,
+          'error'
+        );
+        return;
+      }
 
       if (data.success && data.job) {
         setJobs((prev) => [data.job!, ...prev]);
+        setPendingDuplicate(null);
         showToast(
           `Extracted ${data.job.company} (${data.job.jobTitle}) via ${data.tierUsed}! Added to spreadsheet.`,
           'success'
@@ -86,6 +105,42 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
     } finally {
       setIsIngesting(false);
     }
+  };
+
+  const handleConfirmDuplicate = async (candidateJob: JobRecord) => {
+    setIsIngesting(true);
+    try {
+      const data = await safeFetchJson<{
+        success: boolean;
+        job?: JobRecord;
+        error?: string;
+      }>('/api/extract-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateJob, confirmDuplicate: true }),
+      });
+
+      if (data.success && data.job) {
+        setJobs((prev) => [data.job!, ...prev]);
+        setPendingDuplicate(null);
+        showToast(
+          `Added ${data.job.company} (${data.job.jobTitle}) to spreadsheet!`,
+          'success'
+        );
+      } else {
+        throw new Error(data.error || 'Failed to save confirmed job');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to confirm job addition', 'error');
+      throw err;
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    setPendingDuplicate(null);
+    showToast('Application addition cancelled.', 'success');
   };
 
   const handleStatusChange = async (id: string, newStatus: JobStatus) => {
@@ -193,5 +248,9 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
     handleUpdateJob,
     handleDeleteJob,
     handleImportJobs,
+    pendingDuplicate,
+    setPendingDuplicate,
+    handleConfirmDuplicate,
+    handleCancelDuplicate,
   };
 }

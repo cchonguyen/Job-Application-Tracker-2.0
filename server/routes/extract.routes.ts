@@ -6,12 +6,27 @@ import { detectAts } from '../../src/lib/atsDetect.ts';
 import { initialDateAppliedForStatus } from '../../src/lib/jobDates.ts';
 import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
 import { parseJobTitleAndTeam } from '../../src/lib/jobsStore.ts';
+import { findPastSixMonthsDuplicates } from '../../src/lib/duplicateDetection.ts';
 
 export const extractRouter = Router();
 
 // POST /api/extract-job: Ingest URL or manual text, run pipeline, and append to spreadsheet
 extractRouter.post('/extract-job', async (req, res) => {
-  const { url, manualText, status: initialStatus, notes } = req.body;
+  const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = req.body;
+
+  // Direct fast save of pre-extracted candidate when user confirmed duplicate warning
+  if (candidateJob && confirmDuplicate) {
+    try {
+      const saved = await jobRepository.createJob(candidateJob);
+      return res.json({
+        success: true,
+        job: saved,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message || 'Failed to save confirmed job' });
+    }
+  }
+
   const finalStatus = initialStatus || 'Applied';
   const dateApplied = initialDateAppliedForStatus(finalStatus);
 
@@ -76,6 +91,22 @@ extractRouter.post('/extract-job', async (req, res) => {
       notes: notes || '',
       statusHistory: initialStatusHistory(finalStatus),
     };
+
+    // Check for potential duplicate role or company applied during the past 6 months
+    if (!confirmDuplicate) {
+      const existingJobs = await jobRepository.listJobs();
+      const duplicates = findPastSixMonthsDuplicates(newJobRecord, existingJobs);
+      if (duplicates.length > 0) {
+        return res.json({
+          success: true,
+          potentialDuplicate: true,
+          candidateJob: newJobRecord,
+          duplicates,
+          tierUsed,
+          diagnosticSteps,
+        });
+      }
+    }
 
     const saved = await jobRepository.createJob(newJobRecord);
 

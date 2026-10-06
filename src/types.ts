@@ -73,3 +73,20 @@ export interface DiagnosticReport {
   extractedData?: Partial<JobRecord>;
   rawOutputSnippet?: string;
 }
+
+export type DuplicateMatchType = 'both' | 'company' | 'role';
+
+export interface DuplicateMatch {
+  existingJob: JobRecord;
+  matchType: DuplicateMatchType;
+  matchedFields: ('company' | 'role')[];
+  appliedDateStr: string;
+  daysAgo: number;
+  timeAgoLabel: string;
+  reason: string;
+}
+
+export interface PendingDuplicateCandidate {
+  candidateJob: JobRecord;
+  duplicates: DuplicateMatch[];
+}

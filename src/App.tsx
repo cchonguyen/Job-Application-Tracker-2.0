@@ -6,6 +6,7 @@ import { JobDetailModal } from './components/JobDetailModal';
 import { EditJobModal } from './components/EditJobModal';
 import { AtsDiagnosticModal } from './components/AtsDiagnosticModal';
 import { GoogleSheetsSyncModal } from './components/GoogleSheetsSyncModal';
+import { DuplicateWarningModal } from './components/DuplicateWarningModal';
 import { useGoogleSheetsSync } from './hooks/useGoogleSheetsSync';
 import { useJobsState } from './hooks/useJobsState';
 import { JobRecord } from './types';
@@ -35,6 +36,9 @@ export default function App() {
     handleUpdateJob,
     handleDeleteJob,
     handleImportJobs,
+    pendingDuplicate,
+    handleConfirmDuplicate,
+    handleCancelDuplicate,
   } = useJobsState(showToast);
 
   // Modals state
@@ -225,6 +229,20 @@ export default function App() {
         }}
         onDisconnectSheet={sheetsSync.disconnectSheet}
         jobsCount={jobs.length}
+      />
+
+      {/* Duplicate Application Warning & Comparison Notification */}
+      <DuplicateWarningModal
+        isOpen={!!pendingDuplicate}
+        candidateJob={pendingDuplicate?.candidateJob || null}
+        duplicates={pendingDuplicate?.duplicates || []}
+        isSubmitting={isIngesting}
+        onContinue={handleConfirmDuplicate}
+        onCancel={handleCancelDuplicate}
+        onViewExisting={(existing) => {
+          handleCancelDuplicate();
+          setSelectedJob(existing);
+        }}
       />
     </div>
   );
