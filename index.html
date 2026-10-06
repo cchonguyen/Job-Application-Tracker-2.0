@@ -9,6 +9,22 @@
     <meta property="og:description" content="Autonomous job application tracking assistant that scrapes job postings, extracts structured attributes, and manages them in a persistent spreadsheet." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Ignore Vite dev client WebSocket errors in the preview environment
+      window.addEventListener('unhandledrejection', function (event) {
+        var reason = event.reason;
+        var msg = (reason && (reason.message || reason.stack || String(reason))) || '';
+        if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('@vite/client') !== -1 || msg.indexOf('vite:ws') !== -1) {
+          event.preventDefault();
+        }
+      });
+      window.addEventListener('error', function (event) {
+        var msg = (event.message || (event.error && event.error.message)) || '';
+        if (msg.indexOf('WebSocket') !== -1 || (event.filename && event.filename.indexOf('@vite/client') !== -1)) {
+          event.preventDefault();
+        }
+      });
+    </script>
   </head>
   <body>
     <script>
