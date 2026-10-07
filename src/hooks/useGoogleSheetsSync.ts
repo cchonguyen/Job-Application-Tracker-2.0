@@ -101,7 +101,13 @@ export function useGoogleSheetsSync(jobs: JobRecord[]) {
       }
       return false;
     } catch (err: any) {
-      setLastError(err.message || 'Google Sign-in failed');
+      if (err.code === 'auth/popup-closed-by-user') {
+        setLastError('Sign-in window was closed before finishing authentication.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setLastError('Domain authorization in progress. Please refresh the page and try again.');
+      } else {
+        setLastError(err.message || 'Google Sign-in failed');
+      }
       return false;
     } finally {
       setIsLoggingIn(false);
