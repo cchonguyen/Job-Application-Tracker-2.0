@@ -14,6 +14,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
+import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { JobRecord } from '../types';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
 import type { GoogleSheetSummary } from '../lib/googleSheets';
@@ -21,7 +22,7 @@ import type { GoogleSheetSummary } from '../lib/googleSheets';
 interface GoogleSheetsSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: User | null;
+  user: User | GoogleAuthUser | null;
   hasToken: boolean;
   isLoggingIn: boolean;
   connectedSheet: ConnectedSheet | null;
@@ -70,6 +71,7 @@ export const GoogleSheetsSyncModal = ({
   const [manualSheetUrl, setManualSheetUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   // Mandatory confirmation state for destructive overwrite
   const [pendingConfirmAction, setPendingConfirmAction] = useState<{
@@ -320,9 +322,65 @@ export const GoogleSheetsSyncModal = ({
 
           {/* Error Banner */}
           {(actionError || lastError) && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
-              <span>{actionError || lastError}</span>
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2.5">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                <span className="font-medium flex-1">{actionError || lastError}</span>
+              </div>
+
+              {/* Render / External Domain Authorization Guide */}
+              {(lastError?.includes('unauthorized-domain') ||
+                lastError?.includes('Domain authorization') ||
+                lastError?.includes('authorized domain')) && (
+                <div className="pt-2 border-t border-rose-200/70 text-[11px] text-rose-900 space-y-2 bg-white/60 p-2.5 rounded-lg">
+                  <div className="font-semibold text-rose-950 flex items-center justify-between">
+                    <span>Render / External Host Authorization Required</span>
+                  </div>
+                  <p className="text-slate-600 leading-relaxed">
+                    Firebase Authentication requires externally hosted domains (such as Render) to be allowlisted in the Firebase project settings.
+                  </p>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                      Current Host Domain:
+                    </span>
+                    <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-md border border-slate-300 font-mono text-[11px] text-slate-800">
+                      <span className="truncate flex-1 select-all font-semibold">
+                        {typeof window !== 'undefined' ? window.location.hostname : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            navigator.clipboard.writeText(window.location.hostname);
+                            setCopiedDomain(true);
+                            setTimeout(() => setCopiedDomain(false), 2500);
+                          }
+                        }}
+                        className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-sans text-[10px] font-bold cursor-pointer shrink-0 transition-colors"
+                      >
+                        {copiedDomain ? 'Copied ✓' : 'Copy Domain'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0302459519/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-bold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      <span>1. Open Firebase Console Settings</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <span className="text-slate-500">→</span>
+                    <span className="text-slate-700">2. Under &quot;Authorized domains&quot;, click <strong>Add domain</strong> & paste</span>
+                    <span className="text-slate-500">→</span>
+                    <span className="text-slate-700">3. Retry <strong>Sign in with Google</strong></span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -27,6 +27,7 @@ import { ManualJobModal } from './ManualJobModal';
 import { DevSandboxModal } from './DevSandboxModal';
 import { PortalDropdown } from './PortalDropdown';
 import type { User } from 'firebase/auth';
+import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
 
 interface HeaderActionPanelProps {
@@ -39,7 +40,7 @@ interface HeaderActionPanelProps {
   onThemeModeChange: (mode: ThemeMode) => void;
   onThemeAccentChange: (accent: ThemeAccent) => void;
   googleSheetsProps?: {
-    user: User | null;
+    user: User | GoogleAuthUser | null;
     hasToken: boolean;
     connectedSheet: ConnectedSheet | null;
     autoSync: boolean;

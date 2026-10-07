@@ -6,6 +6,7 @@ import {
   googleSignIn,
   logout as authLogout,
   getAccessToken,
+  type GoogleAuthUser,
 } from '../lib/googleAuth';
 import {
   syncJobsToSpreadsheet,
@@ -26,7 +27,7 @@ export interface ConnectedSheet {
 }
 
 export function useGoogleSheetsSync(jobs: JobRecord[]) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | GoogleAuthUser | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [connectedSheet, setConnectedSheet] = useState<ConnectedSheet | null>(() => {
