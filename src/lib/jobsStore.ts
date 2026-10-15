@@ -251,6 +251,58 @@ function normalizeJobRecord(job: JobRecord): JobRecord {
   };
 }
 
+/**
+ * Read-time view of a stored job. Saved jobs are point-in-time snapshots of the JD,
+ * so this fills derived fields (dateAdded, salary bounds, status history) but never
+ * re-parses the captured title, team, or salary text.
+ */
+function hydrateStoredJob(job: JobRecord): JobRecord {
+  const derived = normalizeJobRecord(job);
+  return {
+    ...derived,
+    jobTitle: job.jobTitle,
+    team: job.team || undefined,
+    salary: job.salary || derived.salary,
+  };
+}
+
+function differs(updates: Partial<JobRecord>, existing: JobRecord, keys: (keyof JobRecord)[]): boolean {
+  return keys.some(
+    (key) => Object.prototype.hasOwnProperty.call(updates, key) && updates[key] !== existing[key]
+  );
+}
+
+/**
+ * Apply an edit to a stored job. Captured JD fields are only re-normalized when the
+ * edit actually changes them, so a status change never rewrites the saved title or salary.
+ */
+function mergeJobUpdate(existing: JobRecord, updates: Partial<JobRecord>): JobRecord {
+  const merged = normalizeJobRecord({
+    ...existing,
+    ...updates,
+    companyMetadata: {
+      ...(existing.companyMetadata || {}),
+      ...(updates.companyMetadata || {}),
+    },
+    positionMetadata: {
+      ...(existing.positionMetadata || {}),
+      ...(updates.positionMetadata || {}),
+    },
+  });
+
+  if (!differs(updates, existing, ['jobTitle', 'team'])) {
+    merged.jobTitle = existing.jobTitle;
+    merged.team = existing.team;
+  }
+  if (!differs(updates, existing, ['salary', 'salaryMin', 'salaryMax'])) {
+    merged.salary = existing.salary;
+    merged.salaryMin = existing.salaryMin;
+    merged.salaryMax = existing.salaryMax;
+  }
+
+  return merged;
+}
+
 function rowToJob(row: JobRow): JobRecord {
   const posMeta = row.position_metadata || { requiredSkills: [] };
   const salaryMin =
@@ -276,7 +328,7 @@ function rowToJob(row: JobRow): JobRecord {
     row.status_history || posMeta.statusHistory
   );
 
-  return normalizeJobRecord({
+  return hydrateStoredJob({
     id: row.id,
     company: row.company,
     jobTitle: row.job_title,
@@ -310,8 +362,8 @@ function rowToJob(row: JobRow): JobRecord {
   });
 }
 
-function jobToRow(job: JobRecord): JobRow {
-  const norm = normalizeJobRecord(job);
+/** Map an already-normalized record to a row. Callers decide whether to normalize first. */
+function jobToRow(norm: JobRecord): JobRow {
   const normalizedHistory = normalizeStatusHistory(norm.statusHistory);
   const cleanDateApplied =
     norm.dateApplied && typeof norm.dateApplied === 'string' && norm.dateApplied.trim() !== ''
@@ -354,7 +406,7 @@ function readJsonJobs(): JobRecord[] {
     if (fs.existsSync(DATA_FILE)) {
       const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((job) => normalizeJobRecord(job as JobRecord));
+        return parsed.map((job) => hydrateStoredJob(job as JobRecord));
       }
     }
   } catch (err) {
@@ -404,14 +456,16 @@ export async function listJobs(): Promise<JobRecord[]> {
 }
 
 export async function insertJob(job: JobRecord): Promise<JobRecord> {
+  const captured = normalizeJobRecord(job);
+
   if (!isUsingSupabase()) {
     const jobs = readJsonJobs();
-    jobs.unshift(job);
+    jobs.unshift(captured);
     writeJsonJobs(jobs);
-    return job;
+    return captured;
   }
 
-  const row = jobToRow(job);
+  const row = jobToRow(captured);
   let { data, error } = await getSupabase().from('jobs').insert(row).select('*').single();
 
   if (error && isMissingColumnError(error, 'team')) {
@@ -436,18 +490,7 @@ export async function updateJob(id: string, updates: Partial<JobRecord>): Promis
     const index = jobs.findIndex((j) => j.id === id);
     if (index === -1) return null;
 
-    const merged = normalizeJobRecord({
-      ...jobs[index],
-      ...updates,
-      companyMetadata: {
-        ...(jobs[index].companyMetadata || {}),
-        ...(updates.companyMetadata || {}),
-      },
-      positionMetadata: {
-        ...(jobs[index].positionMetadata || {}),
-        ...(updates.positionMetadata || {}),
-      },
-    });
+    const merged = mergeJobUpdate(jobs[index], updates);
 
     jobs[index] = merged;
     writeJsonJobs(jobs);
@@ -457,18 +500,7 @@ export async function updateJob(id: string, updates: Partial<JobRecord>): Promis
   const existing = await getJobById(id);
   if (!existing) return null;
 
-  const merged: JobRecord = normalizeJobRecord({
-    ...existing,
-    ...updates,
-    companyMetadata: {
-      ...(existing.companyMetadata || {}),
-      ...(updates.companyMetadata || {}),
-    },
-    positionMetadata: {
-      ...(existing.positionMetadata || {}),
-      ...(updates.positionMetadata || {}),
-    },
-  });
+  const merged = mergeJobUpdate(existing, updates);
 
   const row = jobToRow(merged);
   let { data, error } = await getSupabase()
@@ -555,7 +587,7 @@ export async function upsertJobs(incoming: JobRecord[]): Promise<UpsertJobsResul
       } else {
         inserted++;
       }
-      byId.set(job.id, job);
+      byId.set(job.id, normalizeJobRecord(job));
     }
 
     const next = Array.from(byId.values()).sort((a, b) =>
@@ -575,7 +607,7 @@ export async function upsertJobs(incoming: JobRecord[]): Promise<UpsertJobsResul
     else inserted++;
   }
 
-  const rows = incoming.map(jobToRow);
+  const rows = incoming.map((job) => jobToRow(normalizeJobRecord(job)));
   let { error } = await getSupabase().from('jobs').upsert(rows, { onConflict: 'id' });
 
   if (error && isMissingColumnError(error, 'team')) {
