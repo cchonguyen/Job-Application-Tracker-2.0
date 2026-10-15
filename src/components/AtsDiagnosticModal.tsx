@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Cpu, Play, CheckCircle2, XCircle, AlertCircle, Clock, ExternalLink, Loader2, ArrowRight } from 'lucide-react';
 import { DiagnosticReport } from '../types';
+import { apiFetch } from '../lib/apiClient';
 
 interface AtsDiagnosticModalProps {
   isOpen: boolean;
@@ -49,7 +50,7 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
     setErrorMsg(null);
 
     try {
-      const res = await fetch('/api/test-ats-diagnostic', {
+      const res = await apiFetch('/api/test-ats-diagnostic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: urlToRun }),
