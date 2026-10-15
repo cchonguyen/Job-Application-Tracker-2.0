@@ -1,5 +1,5 @@
 import { detectAts } from '../../../src/lib/atsDetect.ts';
-import { extractWithGemini, extractWithUrlInference } from './ai/geminiExtractor.ts';
+import { extractWithGemini, extractWithUrlContext } from './ai/geminiExtractor.ts';
 import { cleanErrorMessage } from './geminiClient.ts';
 import { AshbyProvider } from './providers/ashby.provider.ts';
 import { AtsProvider } from './providers/base.provider.ts';
@@ -190,26 +190,23 @@ ${scraped.cleanedText}
       }
     }
 
-    // TIER 4: Gemini 3.8 Flash URL Inference Fallback (Free Tier Generative Call)
+    // TIER 4: Gemini reads the page itself via the url_context tool (never guesses from the URL alone)
     const tier4Start = Date.now();
     diagnosticSteps.push({
-      tier: 'Tier 4 (Gemini 3.8 Flash Free Tier)',
-      name: 'Gemini Deep URL Context & Semantic Inference',
+      tier: 'Tier 4 (Gemini URL Context)',
+      name: 'Gemini Reads the Posting Page Directly',
       status: 'pending',
     });
 
     try {
-      const inferred = await extractWithUrlInference(
-        targetUrl,
-        diagnosticSteps.find((s) => s.tier.includes('Tier 2'))?.details
-      );
+      const extracted = await extractWithUrlContext(targetUrl);
       diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
       diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - tier4Start;
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Deduced role and corporate attributes via Free Tier Gemini 3.8 Flash: ${inferred.company} - ${inferred.jobTitle}`;
+      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini read the posting page: ${extracted.company} - ${extracted.jobTitle}`;
 
       return {
-        extractedData: inferred,
-        tierUsed: 'Gemini 3.8 Flash (Free Tier)',
+        extractedData: extracted,
+        tierUsed: 'Gemini 3.8 Flash URL Context',
         diagnosticSteps,
       };
     } catch (err: any) {

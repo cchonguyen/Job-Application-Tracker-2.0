@@ -3,6 +3,7 @@ import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 
 interface WorkablePosting {
   title?: string;
@@ -167,19 +168,14 @@ export class WorkableProvider implements AtsProvider {
         salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (Refer to job post)',
         salaryMin: parsedSalary.salaryMin,
         salaryMax: parsedSalary.salaryMax,
-        industry: 'Technology & Enterprise Software',
+        industry: 'Unknown',
         summary: cleanSummary || `${fallbackCompany} is hiring for the role of ${fallbackTitle}.`,
-        companyMetadata: {
-          headcount: '1,000+ employees',
-          headquarters: 'United States',
-          ownership: 'Private',
-          foundingYear: 'Unknown',
-        },
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
         positionMetadata: {
           seniority: isSr ? 'Senior' : 'Mid-level',
-          department: posting.department || 'Product & Engineering',
-          employmentType: 'Full-time',
-          requiredSkills: ['Product Management', 'Stakeholder Leadership', 'Problem Solving'],
+          department: posting.department || 'Unknown',
+          employmentType: 'Unknown',
+          requiredSkills: [],
         },
       };
 

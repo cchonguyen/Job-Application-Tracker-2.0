@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../server/services/parsing/ai/geminiExtractor.ts', () => ({
   extractWithGemini: vi.fn(),
-  extractWithUrlInference: vi.fn(),
+  extractWithUrlContext: vi.fn(),
 }));
 
 import { extractWithGemini } from '../../../server/services/parsing/ai/geminiExtractor.ts';

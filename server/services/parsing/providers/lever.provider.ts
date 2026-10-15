@@ -3,6 +3,7 @@ import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 
 export class LeverProvider implements AtsProvider {
   readonly name = 'Lever';
@@ -14,6 +15,7 @@ export class LeverProvider implements AtsProvider {
   private async fetchApi(company: string, jobId: string): Promise<any> {
     const apiUrl = `https://api.lever.co/v0/postings/${encodeURIComponent(company)}/${encodeURIComponent(jobId)}`;
     const response = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(6000),
       headers: {
         Accept: 'application/json',
         'User-Agent': 'JobApplicationTracker/1.0',
@@ -109,19 +111,14 @@ export class LeverProvider implements AtsProvider {
         salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
         salaryMin: parsedSalary.salaryMin,
         salaryMax: parsedSalary.salaryMax,
-        industry: fallbackCompany.toLowerCase().includes('datavant') ? 'Healthcare & Data Collaboration' : 'Technology & Software',
+        industry: 'Unknown',
         summary: fallbackSummary,
-        companyMetadata: {
-          headcount: '1,000+ employees',
-          headquarters: 'United States',
-          ownership: 'Private',
-          foundingYear: 'Unknown',
-        },
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
         positionMetadata: {
           seniority: isSr ? 'Senior' : 'Mid-level',
-          department: atsPayload.categories?.department || 'Product & Engineering',
-          employmentType: atsPayload.categories?.commitment || 'Full-time',
-          requiredSkills: ['Product Management', 'Data Architecture', 'Problem Solving'],
+          department: atsPayload.categories?.department || 'Unknown',
+          employmentType: atsPayload.categories?.commitment || 'Unknown',
+          requiredSkills: [],
         },
       };
 

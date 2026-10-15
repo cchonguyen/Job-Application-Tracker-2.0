@@ -16,3 +16,6 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Required in production: every /api call must present this key (the app prompts for it once per browser).
+      - key: API_ACCESS_KEY
+        generateValue: true

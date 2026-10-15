@@ -20,6 +20,7 @@ import { JobRecord, JobStatus } from '../types';
 import { CompanyLogo } from './CompanyLogo';
 import { getStatusMeta, STATUS_ORDER } from '../lib/statusMeta';
 import { normalizeStatusHistory } from '../lib/statusHistory';
+import { companyFactsForDisplay, needsManualReview } from '../lib/formatHelpers';
 
 interface JobDetailModalProps {
   job: JobRecord | null;
@@ -104,6 +105,8 @@ export const JobDetailModal = ({
     await onUpdateDateApplied(job.id, dateApplied.trim() || null);
     setIsSavingDate(false);
   };
+
+  const companyFacts = companyFactsForDisplay(job?.companyMetadata);
 
   return (
     <AnimatePresence>
@@ -218,6 +221,14 @@ export const JobDetailModal = ({
                 {job.extractedVia && (
                   <span className="text-xs text-indigo-600 font-medium truncate max-w-[12rem] sm:max-w-none">
                     via {job.extractedVia}
+                  </span>
+                )}
+                {needsManualReview(job.extractedVia) && (
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
+                    title="The posting page could not be read automatically, so unknown fields were left as Unknown. Open the posting to check the details."
+                  >
+                    Needs review
                   </span>
                 )}
               </div>
@@ -347,19 +358,19 @@ export const JobDetailModal = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                     <span className="text-slate-400 block text-[10px]">Headcount:</span>
-                    <span className="font-semibold text-slate-800">{job.companyMetadata?.headcount || 'N/A'}</span>
+                    <span className="font-semibold text-slate-800">{companyFacts.headcount}</span>
                   </div>
                   <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                     <span className="text-slate-400 block text-[10px]">Headquarters:</span>
-                    <span className="font-semibold text-slate-800">{job.companyMetadata?.headquarters || 'N/A'}</span>
+                    <span className="font-semibold text-slate-800">{companyFacts.headquarters}</span>
                   </div>
                   <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                     <span className="text-slate-400 block text-[10px]">Ownership:</span>
-                    <span className="font-semibold text-slate-800">{job.companyMetadata?.ownership || 'Private'}</span>
+                    <span className="font-semibold text-slate-800">{companyFacts.ownership}</span>
                   </div>
                   <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                     <span className="text-slate-400 block text-[10px]">Founding Year:</span>
-                    <span className="font-semibold text-slate-800">{job.companyMetadata?.foundingYear || 'N/A'}</span>
+                    <span className="font-semibold text-slate-800">{companyFacts.foundingYear}</span>
                   </div>
                 </div>
               </div>
@@ -374,7 +385,7 @@ export const JobDetailModal = ({
                   <div className="flex flex-wrap items-center gap-4 text-slate-700">
                     <div>
                       <span className="text-slate-400 mr-1">Seniority:</span>
-                      <span className="font-semibold text-slate-900">{job.positionMetadata?.seniority || 'Mid-level'}</span>
+                      <span className="font-semibold text-slate-900">{job.positionMetadata?.seniority || 'Unknown'}</span>
                     </div>
                     {job.team && (
                       <div>
@@ -384,11 +395,11 @@ export const JobDetailModal = ({
                     )}
                     <div>
                       <span className="text-slate-400 mr-1">Department:</span>
-                      <span className="font-semibold text-slate-900">{job.positionMetadata?.department || 'Engineering'}</span>
+                      <span className="font-semibold text-slate-900">{job.positionMetadata?.department || 'Unknown'}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 mr-1">Type:</span>
-                      <span className="font-semibold text-slate-900">{job.positionMetadata?.employmentType || 'Full-time'}</span>
+                      <span className="font-semibold text-slate-900">{job.positionMetadata?.employmentType || 'Unknown'}</span>
                     </div>
                   </div>
 

@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { deriveCompanyFromTitle, slugToCompanyName } from '../../../../src/lib/companyName.ts';
-import { extractSalaryFromTextOrJson, getBenchmarkSalary } from '../../../../src/lib/salary.ts';
+import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
+import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { ExtractedJobAttributes, ScrapedHtmlData } from '../types.ts';
 
 export const BANNED_HEADERS_REGEX = /^(job\s+description|job\s+summary|job\s+overview|job\s+details|position\s+overview|position\s+summary|role\s+overview|role\s+summary|about\s+the\s+role|about\s+the\s+job|about\s+the\s+team|about\s+us|who\s+we\s+are|what\s+you'?ll\s+do|what\s+you\s+will\s+do|what\s+you\s+bring|what\s+we'?re\s+looking\s+for|what\s+we\s+offer|who\s+you\s+are|responsibilities|key\s+responsibilities|essential\s+duties|qualifications|requirements|minimum\s+qualifications|preferred\s+qualifications|skills\s+and\s+experience|skills|experience|benefits|perks|compensation|total\s+rewards|pay\s+range|salary|location|remote|hybrid|apply\s+now|how\s+to\s+apply|equal\s+opportunity|overview|summary|description|introduction|careers?)$/i;
@@ -91,6 +92,8 @@ export function cleanCompanyName(rawUrl: string, ogSiteName?: string, text?: str
 
 export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtmlData> {
   const response = await fetch(urlStr, {
+    // Slow or hanging career sites must not stall the ingest; past this the pipeline moves on to Tier 4.
+    signal: AbortSignal.timeout(10_000),
     headers: {
       'User-Agent':
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -287,9 +290,10 @@ export function parseManualTextDeterministically(text: string, targetUrl?: strin
     jobTitle = jobTitle.replace(/\s*[-|•].*$/, '').trim();
   }
 
-  const salary = extractSalaryFromTextOrJson(text, undefined, company, jobTitle);
+  // No company/title hints: a fallback snapshot must not substitute benchmark salaries for what the text says.
+  const salary = extractSalaryFromTextOrJson(text);
 
-  let location = 'Remote (US)';
+  let location = 'Not listed';
   const locMatch = text.match(/(?:location|workplace|office)\s*[:\-]\s*([^\n]+)/i);
   if (locMatch && locMatch[1]) {
     location = locMatch[1].trim();
@@ -316,21 +320,11 @@ export function parseManualTextDeterministically(text: string, targetUrl?: strin
     'Cross-functional Leadership', 'Data Analysis', 'User Research', 'Healthcare Tech', 'Pharmacy Care'
   ];
   const detectedSkills = commonSkills.filter(skill => new RegExp(`\\b${skill}\\b`, 'i').test(text));
-  const requiredSkills = detectedSkills.length >= 2
-    ? detectedSkills.slice(0, 5)
-    : (department === 'Product'
-      ? ['Product Strategy', 'Roadmap Planning', 'Agile', 'Stakeholder Leadership']
-      : ['Software Engineering', 'System Architecture', 'Problem Solving', 'API Design']);
+  const requiredSkills = detectedSkills.slice(0, 5);
 
   const cleanSummary = lines.filter(l => !BANNED_HEADERS_REGEX.test(l)).slice(0, 4).join(' ').slice(0, 400);
 
-  const industry = company.toLowerCase().includes('transcarent')
-    ? 'Healthcare & Pharmacy Solutions'
-    : company.toLowerCase().includes('datavant')
-    ? 'Healthcare & Data Collaboration'
-    : company.toLowerCase().includes('veeva')
-    ? 'Life Sciences & Healthcare Cloud'
-    : 'Technology & Enterprise Software';
+  const industry = 'Unknown';
 
   return {
     company,
@@ -342,16 +336,11 @@ export function parseManualTextDeterministically(text: string, targetUrl?: strin
     salaryMax: salary.salaryMax,
     industry,
     summary: cleanSummary || `${company} is hiring for the role of ${jobTitle}.`,
-    companyMetadata: {
-      headcount: '1,000+ employees',
-      headquarters: 'United States',
-      ownership: 'Private',
-      foundingYear: 'Unknown',
-    },
+    companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
     positionMetadata: {
       seniority,
       department,
-      employmentType: 'Full-time',
+      employmentType: /contract/i.test(text) ? 'Contract' : /full[-\s]?time/i.test(text) ? 'Full-time' : 'Unknown',
       requiredSkills,
     },
   };
@@ -360,7 +349,7 @@ export function parseManualTextDeterministically(text: string, targetUrl?: strin
 export function parseUrlDeterministically(urlStr: string, scraped?: ScrapedHtmlData | null): ExtractedJobAttributes {
   let company = 'Target Company';
   let jobTitle = 'Software & Product Specialist';
-  let location = 'Remote / Hybrid';
+  let location = 'Not listed';
   let salaryInfo = { salary: 'Not listed', salaryMin: null as number | null, salaryMax: null as number | null };
 
   if (scraped) {
@@ -376,9 +365,9 @@ export function parseUrlDeterministically(urlStr: string, scraped?: ScrapedHtmlD
       .join('\n\n');
 
     company = cleanCompanyName(urlStr, scraped.ogSiteName, combinedScrapedText, scraped.ogTitle || scraped.title);
-    salaryInfo = extractSalaryFromTextOrJson(combinedScrapedText, scraped.jsonLd, company, jobTitle);
+    salaryInfo = extractSalaryFromTextOrJson(combinedScrapedText, scraped.jsonLd);
     if (combinedScrapedText && /remote/i.test(combinedScrapedText)) {
-      location = 'Remote (US)';
+      location = 'Remote';
     }
   }
 
@@ -423,13 +412,6 @@ export function parseUrlDeterministically(urlStr: string, scraped?: ScrapedHtmlD
     jobTitle = jobTitle.replace(/\s*[-|•].*$/, '').trim() || 'Software & Product Specialist';
   }
 
-  if (salaryInfo.salary === 'Not listed') {
-    const benchmark = getBenchmarkSalary(company, jobTitle);
-    if (benchmark) {
-      salaryInfo.salary = benchmark;
-    }
-  }
-
   const isSr = /\b(sr|senior|lead|principal|director|head|staff|vp)\b/i.test(jobTitle);
   let department = 'Product & Engineering';
   if (/product/i.test(jobTitle)) department = 'Product';
@@ -444,26 +426,18 @@ export function parseUrlDeterministically(urlStr: string, scraped?: ScrapedHtmlD
     salary: salaryInfo.salary,
     salaryMin: salaryInfo.salaryMin,
     salaryMax: salaryInfo.salaryMax,
-    industry: 'Technology & Enterprise Solutions',
+    industry: 'Unknown',
     summary:
       scraped?.ogDescription ||
       scraped?.metaDescription ||
-      `${company} is recruiting for the role of ${jobTitle}. Details captured from official posting.`,
-    companyMetadata: {
-      headcount: '1,000+ employees',
-      headquarters: 'United States',
-      ownership: 'Private',
-      foundingYear: 'Unknown',
-    },
+      `The posting page could not be read automatically. Company and title were taken from the link; open the posting to review the details.`,
+    companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
     positionMetadata: {
       seniority: isSr ? 'Senior' : 'Mid-level',
       department,
-      employmentType: 'Full-time',
+      employmentType: 'Unknown',
       team: team || undefined,
-      requiredSkills:
-        department === 'Product'
-          ? ['Product Strategy', 'Roadmap Planning', 'Agile Delivery', 'Cross-functional Leadership']
-          : ['Software Engineering', 'System Design', 'Problem Solving', 'Code Craftsmanship'],
+      requiredSkills: [],
     },
   };
 }

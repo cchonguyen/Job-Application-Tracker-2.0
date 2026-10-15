@@ -8,6 +8,7 @@ import {
   WorkArrangementType,
   parseLocationParts,
   formatNormalizedLocation,
+  companyFactsForDisplay,
 } from '../lib/formatHelpers';
 
 interface EditJobModalProps {
@@ -32,7 +33,7 @@ export const EditJobModal = ({ job, isOpen, onClose, onSave }: EditJobModalProps
   const [summary, setSummary] = useState('');
   const [headcount, setHeadcount] = useState('');
   const [headquarters, setHeadquarters] = useState('');
-  const [ownership, setOwnership] = useState('Private');
+  const [ownership, setOwnership] = useState('Unknown');
   const [foundingYear, setFoundingYear] = useState<string | number>('');
   const [seniority, setSeniority] = useState('Mid-level');
   const [department, setDepartment] = useState('Engineering');
@@ -61,9 +62,10 @@ export const EditJobModal = ({ job, isOpen, onClose, onSave }: EditJobModalProps
       setDateAdded(job.dateAdded || job.createdAt?.split('T')[0] || todayIsoDate());
       setIndustry(job.industry);
       setSummary(job.summary);
-      setHeadcount(job.companyMetadata?.headcount || '');
-      setHeadquarters(job.companyMetadata?.headquarters || '');
-      setOwnership(job.companyMetadata?.ownership || 'Private');
+      const facts = companyFactsForDisplay(job.companyMetadata);
+      setHeadcount(facts.headcount === 'Unknown' ? '' : facts.headcount);
+      setHeadquarters(facts.headquarters === 'Unknown' ? '' : facts.headquarters);
+      setOwnership(facts.ownership);
       setFoundingYear(job.companyMetadata?.foundingYear || '');
       setSeniority(job.positionMetadata?.seniority || 'Mid-level');
       setDepartment(job.positionMetadata?.department || 'Engineering');

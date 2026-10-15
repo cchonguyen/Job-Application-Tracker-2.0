@@ -311,3 +311,39 @@ export function getJobAgeTimestampMs(job: JobRecord): number {
   }
 }
 
+
+/**
+ * True when no model actually read the posting and the job was filled by a deterministic fallback
+ * (scraper blocked, Gemini unavailable). Those snapshots carry "Unknown" fields and are worth a manual look.
+ */
+export function needsManualReview(extractedVia?: string | null): boolean {
+  return !!extractedVia && /deterministic|resilient dom parser/i.test(extractedVia);
+}
+
+const LEGACY_PLACEHOLDER = { headcount: '1,000+ employees', headquarters: 'United States', ownership: 'Private' };
+
+/**
+ * Company facts as they should be shown. Before v0.3.0 every fallback path (ATS API without Gemini, deterministic
+ * parsers) stored the same hard-coded trio below, so jobs saved then all look identical. That exact trio is a
+ * placeholder, not data, and is shown as Unknown; the stored snapshot itself is left untouched.
+ */
+export function companyFactsForDisplay(meta?: {
+  headcount?: string;
+  headquarters?: string;
+  ownership?: string;
+  foundingYear?: string | number;
+}): { headcount: string; headquarters: string; ownership: string; foundingYear: string } {
+  const isPlaceholder =
+    meta?.headcount === LEGACY_PLACEHOLDER.headcount &&
+    meta?.headquarters === LEGACY_PLACEHOLDER.headquarters &&
+    meta?.ownership === LEGACY_PLACEHOLDER.ownership;
+  if (!meta || isPlaceholder) {
+    return { headcount: 'Unknown', headquarters: 'Unknown', ownership: 'Unknown', foundingYear: meta?.foundingYear ? String(meta.foundingYear) : 'Unknown' };
+  }
+  return {
+    headcount: meta.headcount || 'Unknown',
+    headquarters: meta.headquarters || 'Unknown',
+    ownership: meta.ownership || 'Unknown',
+    foundingYear: meta.foundingYear ? String(meta.foundingYear) : 'Unknown',
+  };
+}

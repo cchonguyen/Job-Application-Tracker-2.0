@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { JobRecord, JobStatus, PendingDuplicateCandidate } from '../types';
+import { apiFetch } from '../lib/apiClient';
 
 interface SafeFetchOptions extends RequestInit {}
 
 async function safeFetchJson<T = any>(url: string, options?: SafeFetchOptions): Promise<T> {
-  const res = await fetch(url, options);
+  const res = await apiFetch(url, options);
   const text = await res.text();
   let data: any = null;
 

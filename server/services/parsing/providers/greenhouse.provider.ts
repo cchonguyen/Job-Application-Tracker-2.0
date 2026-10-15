@@ -3,6 +3,7 @@ import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 
 export class GreenhouseProvider implements AtsProvider {
   readonly name = 'Greenhouse';
@@ -120,19 +121,14 @@ export class GreenhouseProvider implements AtsProvider {
         salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
         salaryMin: parsedSalary.salaryMin,
         salaryMax: parsedSalary.salaryMax,
-        industry: fallbackCompany.toLowerCase().includes('datavant') ? 'Healthcare & Data Collaboration' : 'Technology & Software',
+        industry: 'Unknown',
         summary: fallbackSummary,
-        companyMetadata: {
-          headcount: '1,000+ employees',
-          headquarters: 'United States',
-          ownership: 'Private',
-          foundingYear: 'Unknown',
-        },
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
         positionMetadata: {
           seniority: isSr ? 'Senior' : 'Mid-level',
-          department: atsPayload.departments?.[0]?.name || 'Product & Engineering',
+          department: atsPayload.departments?.[0]?.name || 'Unknown',
           employmentType: 'Full-time',
-          requiredSkills: ['Product Management', 'Data Architecture', 'Problem Solving'],
+          requiredSkills: [],
         },
       };
 

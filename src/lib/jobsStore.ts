@@ -81,6 +81,9 @@ const INITIAL_SEED_JOBS: JobRecord[] = [
 
 let supabaseClient: SupabaseClient | null | undefined;
 
+/** Matches Supabase's default max rows per request. */
+const LIST_PAGE_SIZE = 1000;
+
 export function isUsingSupabase(): boolean {
   return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
 }
@@ -443,16 +446,26 @@ export async function listJobs(): Promise<JobRecord[]> {
     return readJsonJobs();
   }
 
-  const { data, error } = await getSupabase()
-    .from('jobs')
-    .select('*')
-    .order('created_at', { ascending: false });
+  // Supabase caps a single select at 1,000 rows by default, and every ingest adds a snapshot row, so read in pages
+  // until a short page comes back. Ordering by id as well keeps pages stable when created_at values tie.
+  const rows: JobRow[] = [];
+  for (let from = 0; ; from += LIST_PAGE_SIZE) {
+    const { data, error } = await getSupabase()
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + LIST_PAGE_SIZE - 1);
 
-  if (error) {
-    throw new Error(supabaseErrorMessage('listJobs', error));
+    if (error) {
+      throw new Error(supabaseErrorMessage('listJobs', error));
+    }
+
+    rows.push(...((data || []) as JobRow[]));
+    if (!data || data.length < LIST_PAGE_SIZE) break;
   }
 
-  return (data || []).map((row) => rowToJob(row as JobRow));
+  return rows.map((row) => rowToJob(row));
 }
 
 export async function insertJob(job: JobRecord): Promise<JobRecord> {
