@@ -26,6 +26,7 @@ import { ThemeSelector } from './ThemeSelector';
 import { ManualJobModal } from './ManualJobModal';
 import { DevSandboxModal } from './DevSandboxModal';
 import { PortalDropdown } from './PortalDropdown';
+import { APP_VERSION, APP_COMMIT, formatBuildTime } from '../lib/appVersion';
 import type { User } from 'firebase/auth';
 import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
@@ -217,6 +218,15 @@ export const HeaderActionPanel = ({
                   <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
                   <span>How Extraction Works</span>
                 </button>
+
+                <div className="border-t border-slate-100 mt-1 mb-0.5" />
+                <div
+                  className="px-3 py-1 text-[10px] font-mono text-slate-400 select-text flex items-center justify-between gap-2"
+                  title={`Built ${formatBuildTime()} from commit ${APP_COMMIT}`}
+                >
+                  <span>v{APP_VERSION}</span>
+                  <span>{APP_COMMIT}</span>
+                </div>
               </PortalDropdown>
             </div>
           </div>
