@@ -397,7 +397,7 @@ export const HeaderActionPanel = ({
                 <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100">
                   <strong className="text-indigo-900 text-sm block mb-1">Tier 1 — Direct ATS API Integration</strong>
                   <p>
-                    For postings from Greenhouse, Lever, and Workable, the system communicates directly with their official REST APIs to retrieve 100% exact structured metadata, department hierarchies, and location details.
+                    For postings from Greenhouse, Lever, Workable, and Ashby, the system communicates directly with their official REST APIs to retrieve 100% exact structured metadata, department hierarchies, and location details.
                   </p>
                 </div>
                 <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">

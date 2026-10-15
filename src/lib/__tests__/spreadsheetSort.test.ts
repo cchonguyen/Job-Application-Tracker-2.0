@@ -5,6 +5,7 @@ import {
   DEFAULT_SORT_ORDER,
   STATUS_PRIORITY_ORDER,
   compareJobsForSpreadsheet,
+  isStatusGroupingActive,
 } from '../../components/spreadsheet/useSpreadsheetFilter';
 import { JobRecord } from '../../types';
 
@@ -194,7 +195,7 @@ describe('Status priority grouping and age sorting in table view', () => {
     ]);
   });
 
-  it('orders by age oldest first when sortOrder is asc in each grouping', () => {
+  it('drops status grouping when the timeline is flipped to oldest first', () => {
     const appliedOld = makeJob({
       company: 'Old Applied',
       status: 'Applied',
@@ -220,14 +221,76 @@ describe('Status priority grouping and age sorting in table view', () => {
     const mixed = [appliedOld, interviewingOld, appliedNew, interviewingNew];
     const sorted = [...mixed].sort((a, b) => compareJobsForSpreadsheet(a, b, 'dateApplied', 'asc'));
 
-    // Status order is still Interviewing first, then Applied.
-    // But within each group: oldest first!
+    // Non-default sort: one flat list, oldest first across all statuses.
     expect(sorted.map((j) => j.company)).toEqual([
       'Old Interviewing',
-      'New Interviewing',
       'Old Applied',
+      'New Interviewing',
       'New Applied',
     ]);
   });
 });
 
+describe('Column sorts temporarily disable status grouping', () => {
+  const makeJob = (partial: Partial<JobRecord>): JobRecord => ({
+    id: 'job_' + Math.random().toString(36).slice(2),
+    company: 'Acme',
+    jobTitle: 'Software Engineer',
+    location: 'Remote',
+    salary: '120k',
+    salaryMin: 120000,
+    salaryMax: 150000,
+    status: 'Applied',
+    dateApplied: '2026-09-15',
+    dateAdded: '2026-09-15',
+    createdAt: '2026-09-15T00:00:00.000Z',
+    industry: 'Tech',
+    summary: 'A job',
+    url: 'https://example.com/job',
+    notes: '',
+    companyMetadata: {},
+    positionMetadata: { requiredSkills: [] },
+    ...partial,
+  });
+
+  const jobs = [
+    makeJob({ company: 'Delta', jobTitle: 'PM', status: 'Applied', salaryMin: 90000, dateApplied: '2026-09-20' }),
+    makeJob({ company: 'Alpha', jobTitle: 'SRE', status: 'Rejected', salaryMin: 150000, dateApplied: '2026-09-01' }),
+    makeJob({ company: 'Charlie', jobTitle: 'Engineer', status: 'Offer', salaryMin: 120000, dateApplied: '2026-09-10' }),
+    makeJob({ company: 'Bravo', jobTitle: 'Designer', status: 'Interviewing', salaryMin: 100000, dateApplied: '2026-09-05' }),
+  ];
+  const sortBy = (field: Parameters<typeof compareJobsForSpreadsheet>[2], order: 'asc' | 'desc') =>
+    [...jobs].sort((a, b) => compareJobsForSpreadsheet(a, b, field, order));
+
+  it('groups only in the default sort', () => {
+    expect(isStatusGroupingActive(DEFAULT_SORT_FIELD, DEFAULT_SORT_ORDER)).toBe(true);
+    expect(isStatusGroupingActive('dateApplied', 'asc')).toBe(false);
+    expect(isStatusGroupingActive('company', 'asc')).toBe(false);
+    expect(isStatusGroupingActive('jobTitle', 'desc')).toBe(false);
+    expect(isStatusGroupingActive('salary', 'asc')).toBe(false);
+  });
+
+  it('alphabetizes company across all statuses', () => {
+    expect(sortBy('company', 'asc').map((j) => j.company)).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta']);
+    expect(sortBy('company', 'desc').map((j) => j.company)).toEqual(['Delta', 'Charlie', 'Bravo', 'Alpha']);
+  });
+
+  it('alphabetizes job title across all statuses', () => {
+    expect(sortBy('jobTitle', 'asc').map((j) => j.jobTitle)).toEqual(['Designer', 'Engineer', 'PM', 'SRE']);
+  });
+
+  it('orders salary across all statuses', () => {
+    expect(sortBy('salary', 'desc').map((j) => j.salaryMin)).toEqual([150000, 120000, 100000, 90000]);
+  });
+
+  it('restores grouping once the sort cycles back to default', () => {
+    const third = getNextSortState('company', 'desc', 'company');
+    expect(isStatusGroupingActive(third.field, third.order)).toBe(true);
+    expect(sortBy(third.field, third.order).map((j) => j.status)).toEqual([
+      'Offer',
+      'Interviewing',
+      'Applied',
+      'Rejected',
+    ]);
+  });
+});

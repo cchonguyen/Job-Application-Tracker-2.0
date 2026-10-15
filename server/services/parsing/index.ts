@@ -1,6 +1,7 @@
 import { detectAts } from '../../../src/lib/atsDetect.ts';
 import { extractWithGemini, extractWithUrlInference } from './ai/geminiExtractor.ts';
 import { cleanErrorMessage } from './geminiClient.ts';
+import { AshbyProvider } from './providers/ashby.provider.ts';
 import { AtsProvider } from './providers/base.provider.ts';
 import { GreenhouseProvider } from './providers/greenhouse.provider.ts';
 import { LeverProvider } from './providers/lever.provider.ts';
@@ -18,10 +19,11 @@ export class JobParsingEngine {
     new GreenhouseProvider(),
     new LeverProvider(),
     new WorkableProvider(),
+    new AshbyProvider(),
   ];
 
   /**
-   * Registers a new ATS provider strategy (e.g. Ashby, SmartRecruiters, Jobvite)
+   * Registers a new ATS provider strategy (e.g. SmartRecruiters, Jobvite)
    */
   public registerProvider(provider: AtsProvider): void {
     this.providers.push(provider);
@@ -104,7 +106,7 @@ export class JobParsingEngine {
           tier: 'Tier 1 (ATS REST API)',
           name: 'ATS Signature Detector',
           status: 'skipped',
-          details: 'URL does not match a known Greenhouse, Lever, or Workable API pattern. Proceeding to Tier 2.',
+          details: 'URL does not match a known Greenhouse, Lever, Workable, or Ashby API pattern. Proceeding to Tier 2.',
         });
       }
     }

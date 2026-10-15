@@ -34,21 +34,32 @@ export function getJobAgeTimestamp(job: JobRecord): number {
   }
 }
 
+/**
+ * Status groupings only apply in the default sort. Any user-toggled sort
+ * (including flipping the timeline to oldest-first) orders the whole list
+ * flat, so e.g. sorting by company alphabetizes across every status.
+ */
+export function isStatusGroupingActive(sortField: SortField, sortOrder: SortOrder): boolean {
+  return sortField === DEFAULT_SORT_FIELD && sortOrder === DEFAULT_SORT_ORDER;
+}
+
 export function compareJobsForSpreadsheet(
   a: JobRecord,
   b: JobRecord,
   sortField: SortField,
   sortOrder: SortOrder
 ): number {
-  // 1. Primary grouping by status pipeline order:
+  // 1. Primary grouping by status pipeline order (default sort only):
   // Accepted -> Offer -> Interviewing -> Applied -> Saved -> Rejected -> Declined
-  const rankA = STATUS_PRIORITY_ORDER[a.status] ?? 99;
-  const rankB = STATUS_PRIORITY_ORDER[b.status] ?? 99;
-  if (rankA !== rankB) {
-    return rankA - rankB;
+  if (isStatusGroupingActive(sortField, sortOrder)) {
+    const rankA = STATUS_PRIORITY_ORDER[a.status] ?? 99;
+    const rankB = STATUS_PRIORITY_ORDER[b.status] ?? 99;
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
   }
 
-  // 2. Secondary ordering within each status grouping:
+  // 2. Ordering by the selected column (within each grouping when grouped):
   if (sortField === 'dateApplied') {
     // Ordered by age in each grouping
     const timeA = getJobAgeTimestamp(a);

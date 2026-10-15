@@ -6,10 +6,9 @@ import { appendStatusHistory, normalizeStatusHistory } from '../../src/lib/statu
 
 export const jobsRouter = Router();
 
-// GET /api/jobs: Fetch all tracked jobs
+// GET /api/jobs: Fetch all tracked jobs (read-only; saved jobs are point-in-time snapshots)
 jobsRouter.get('/', async (_req, res) => {
   try {
-    await jobRepository.reparseAllJobs().catch((e) => console.warn('Auto reparse warning:', e));
     const jobs = await jobRepository.listJobs();
     res.json({ success: true, jobs });
   } catch (err: any) {
