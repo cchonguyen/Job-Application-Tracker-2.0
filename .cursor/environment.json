@@ -1,0 +1,13 @@
+{
+  "name": "Job Application Easy Tracker",
+  "install": "export BUN_INSTALL=\"$HOME/.bun\"\nexport PATH=\"$BUN_INSTALL/bin:$PATH\"\nif ! command -v bun >/dev/null 2>&1; then curl -fsSL https://bun.sh/install | bash; fi\nsudo ln -sf \"$HOME/.bun/bin/bun\" /usr/local/bin/bun\nbun install",
+  "terminals": [
+    {
+      "name": "dev-server",
+      "command": "DISABLE_HMR=true bun run dev"
+    }
+  ],
+  "ports": [
+    3000
+  ]
+}
