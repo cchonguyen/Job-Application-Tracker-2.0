@@ -311,3 +311,11 @@ export function getJobAgeTimestampMs(job: JobRecord): number {
   }
 }
 
+
+/**
+ * True when no model actually read the posting and the job was filled by a deterministic fallback
+ * (scraper blocked, Gemini unavailable). Those snapshots carry "Unknown" fields and are worth a manual look.
+ */
+export function needsManualReview(extractedVia?: string | null): boolean {
+  return !!extractedVia && /deterministic|resilient dom parser/i.test(extractedVia);
+}

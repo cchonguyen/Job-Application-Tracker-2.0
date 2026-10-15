@@ -20,6 +20,7 @@ import { JobRecord, JobStatus } from '../types';
 import { CompanyLogo } from './CompanyLogo';
 import { getStatusMeta, STATUS_ORDER } from '../lib/statusMeta';
 import { normalizeStatusHistory } from '../lib/statusHistory';
+import { needsManualReview } from '../lib/formatHelpers';
 
 interface JobDetailModalProps {
   job: JobRecord | null;
@@ -218,6 +219,14 @@ export const JobDetailModal = ({
                 {job.extractedVia && (
                   <span className="text-xs text-indigo-600 font-medium truncate max-w-[12rem] sm:max-w-none">
                     via {job.extractedVia}
+                  </span>
+                )}
+                {needsManualReview(job.extractedVia) && (
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
+                    title="The posting page could not be read automatically, so unknown fields were left as Unknown. Open the posting to check the details."
+                  >
+                    Needs review
                   </span>
                 )}
               </div>

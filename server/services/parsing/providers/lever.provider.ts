@@ -14,6 +14,7 @@ export class LeverProvider implements AtsProvider {
   private async fetchApi(company: string, jobId: string): Promise<any> {
     const apiUrl = `https://api.lever.co/v0/postings/${encodeURIComponent(company)}/${encodeURIComponent(jobId)}`;
     const response = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(6000),
       headers: {
         Accept: 'application/json',
         'User-Agent': 'JobApplicationTracker/1.0',

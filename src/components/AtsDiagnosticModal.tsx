@@ -31,7 +31,7 @@ const PRESET_TEST_CASES = [
   {
     name: 'Anti-Bot / JS Shell URL Test',
     url: 'https://careers.google.com/jobs/results/123456789',
-    description: 'Tests Tier 4 Gemini 3.8 Flash Free Tier URL Context & Semantic Inference fallback',
+    description: 'Tests Tier 4 Gemini URL Context fallback (Gemini reads the page itself, never guesses)',
   },
 ];
 

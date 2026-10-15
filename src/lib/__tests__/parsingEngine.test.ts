@@ -4,6 +4,7 @@ import { LeverProvider } from '../../../server/services/parsing/providers/lever.
 import { WorkableProvider } from '../../../server/services/parsing/providers/workable.provider.ts';
 import { JobParsingEngine } from '../../../server/services/parsing/index.ts';
 import { parseManualTextDeterministically, parseUrlDeterministically } from '../../../server/services/parsing/utils/htmlCleaner.ts';
+import { needsManualReview } from '../formatHelpers.ts';
 
 describe('Modular Parsing Engine', () => {
   it('instantiates provider instances and verifies signature handling', () => {
@@ -79,5 +80,29 @@ We are looking for an experienced engineer to scale our distributed telemetry pi
     });
 
     expect(typeof engine.registerProvider).toBe('function');
+  });
+});
+
+describe('Deterministic fallbacks never invent details', () => {
+  it('leaves unreadable fields unknown instead of using benchmarks or canned skills', () => {
+    const parsed = parseUrlDeterministically('https://jobs.apple.com/en-us/details/20054321/senior-systems-engineer');
+    expect(parsed.salary).toBe('Not listed');
+    expect(parsed.location).toBe('Not listed');
+    expect(parsed.industry).toBe('Unknown');
+    expect(parsed.companyMetadata.headcount).toBe('Unknown');
+    expect(parsed.positionMetadata.requiredSkills).toEqual([]);
+  });
+
+  it('keeps a salary that the manual text actually states', () => {
+    const parsed = parseManualTextDeterministically('Company: Datadog\nTitle: Engineer\nSalary: $190,000 - $240,000 / yr\nWe build telemetry.');
+    expect(parsed.salary).not.toBe('Not listed');
+    expect(parsed.companyMetadata.headquarters).toBe('Unknown');
+  });
+
+  it('flags fallback snapshots for manual review', () => {
+    expect(needsManualReview('Deterministic URL Parser (Free Tier Safety)')).toBe(true);
+    expect(needsManualReview('Resilient DOM Parser (Free Tier Safety)')).toBe(true);
+    expect(needsManualReview('Greenhouse API')).toBe(false);
+    expect(needsManualReview(undefined)).toBe(false);
   });
 });

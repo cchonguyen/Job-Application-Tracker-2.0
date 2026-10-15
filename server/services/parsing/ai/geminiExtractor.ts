@@ -1,6 +1,56 @@
-import { Type } from '@google/genai';
+import { Type, UrlRetrievalStatus } from '@google/genai';
 import { getGemini } from '../geminiClient.ts';
 import { ExtractedJobAttributes } from '../types.ts';
+
+// Gemini calls must never hang an ingest: past these limits the pipeline moves on to the next tier.
+const GEMINI_TIMEOUT_MS = 25_000;
+const GEMINI_URL_CONTEXT_TIMEOUT_MS = 40_000;
+
+const JOB_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    company: { type: Type.STRING },
+    jobTitle: { type: Type.STRING },
+    team: { type: Type.STRING },
+    location: { type: Type.STRING },
+    salary: { type: Type.STRING },
+    industry: { type: Type.STRING },
+    summary: { type: Type.STRING },
+    companyMetadata: {
+      type: Type.OBJECT,
+      properties: {
+        headcount: { type: Type.STRING },
+        headquarters: { type: Type.STRING },
+        ownership: { type: Type.STRING },
+        foundingYear: { type: Type.STRING },
+      },
+      required: ['headcount', 'headquarters', 'ownership'],
+    },
+    positionMetadata: {
+      type: Type.OBJECT,
+      properties: {
+        seniority: { type: Type.STRING },
+        department: { type: Type.STRING },
+        employmentType: { type: Type.STRING },
+        requiredSkills: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      required: ['seniority', 'department', 'employmentType', 'requiredSkills'],
+    },
+  },
+  required: [
+    'company',
+    'jobTitle',
+    'location',
+    'salary',
+    'industry',
+    'summary',
+    'companyMetadata',
+    'positionMetadata',
+  ],
+};
 
 export async function extractWithGemini(extractedContext: {
   url?: string;
@@ -47,52 +97,9 @@ REQUIREMENTS FOR FIELDS:
     model: 'gemini-3.8-flash',
     contents: prompt,
     config: {
+      abortSignal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          company: { type: Type.STRING },
-          jobTitle: { type: Type.STRING },
-          team: { type: Type.STRING },
-          location: { type: Type.STRING },
-          salary: { type: Type.STRING },
-          industry: { type: Type.STRING },
-          summary: { type: Type.STRING },
-          companyMetadata: {
-            type: Type.OBJECT,
-            properties: {
-              headcount: { type: Type.STRING },
-              headquarters: { type: Type.STRING },
-              ownership: { type: Type.STRING },
-              foundingYear: { type: Type.STRING },
-            },
-            required: ['headcount', 'headquarters', 'ownership'],
-          },
-          positionMetadata: {
-            type: Type.OBJECT,
-            properties: {
-              seniority: { type: Type.STRING },
-              department: { type: Type.STRING },
-              employmentType: { type: Type.STRING },
-              requiredSkills: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-              },
-            },
-            required: ['seniority', 'department', 'employmentType', 'requiredSkills'],
-          },
-        },
-        required: [
-          'company',
-          'jobTitle',
-          'location',
-          'salary',
-          'industry',
-          'summary',
-          'companyMetadata',
-          'positionMetadata',
-        ],
-      },
+      responseSchema: JOB_RESPONSE_SCHEMA,
     },
   });
 
@@ -100,94 +107,42 @@ REQUIREMENTS FOR FIELDS:
   return JSON.parse(text);
 }
 
-export async function extractWithUrlInference(urlStr: string, errorMessage?: string): Promise<ExtractedJobAttributes> {
+/**
+ * Last-resort tier when our own scraper could not read the page. Gemini fetches the URL itself through the
+ * url_context tool. Saved jobs are immutable snapshots, so this must never guess: if Gemini could not read
+ * the page we throw and let the caller fall back to the deterministic parser, which marks unknowns as such.
+ */
+export async function extractWithUrlContext(urlStr: string): Promise<ExtractedJobAttributes> {
   const ai = getGemini();
 
   const prompt = `You are an expert job application analyst.
-A user provided this job posting URL, but direct automated HTTP scraping was blocked or returned a restricted shell:
-URL: "${urlStr}"
-${errorMessage ? `Fetch diagnostic note: "${errorMessage}"` : ''}
+Read the job posting at this URL with the URL context tool: ${urlStr}
 
-Based on the URL domain, URL path segments, slugs, query parameters, company branding in the domain, standard tech industry compensation levels, and typical role responsibilities for this company:
-1. Deduce the company name accurately from the domain/subdomain/slug (e.g. "careers.google.com" -> "Google", "stripe.com" -> "Stripe", "boards.greenhouse.io/figma" -> "Figma").
-2. Deduce the job title or department from the slug/path (or provide a sensible default if only an ID is visible).
-3. Provide realistic industry classification, typical headquarters and employee size for that company, and a summary describing the expected role scope.
-4. Note that if specific compensation is not in the URL slug, set salary to "Not listed (Refer to job post)".
-
-Return a strictly valid JSON object matching this schema:
-{
-  "company": "Official Company Name",
-  "jobTitle": "Standardized Role Title",
-  "location": "Location (Remote / Hybrid / On-site)",
-  "salary": "Compensation or Not listed",
-  "industry": "Industry Sector",
-  "summary": "3-5 sentence summary of the role responsibilities, tech stack, and company mission.",
-  "companyMetadata": {
-    "headcount": "Approximate headcount",
-    "headquarters": "City, Country",
-    "ownership": "Public or Private",
-    "foundingYear": "Founding year"
-  },
-  "positionMetadata": {
-    "seniority": "Seniority level",
-    "department": "Department",
-    "employmentType": "Full-time",
-    "requiredSkills": ["Skill1", "Skill2", "Skill3"]
-  }
-}
-Output JSON only.`;
+Extract the posting into the JSON schema. Use ONLY facts stated on that page:
+- Never infer salary, location, skills, or responsibilities from the company name or from typical roles.
+- salary: the exact range or rate the page states, otherwise "Not listed".
+- summary: 3-5 sentences describing responsibilities and scope exactly as the page describes them.
+- requiredSkills: skills the page names; an empty array if it names none.
+- Any other field the page does not state: "Unknown".
+- companyMetadata may use well-known public facts about the employer (headquarters, ownership, founding year, approximate headcount); use "Unknown" when unsure.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3.8-flash',
     contents: prompt,
     config: {
+      abortSignal: AbortSignal.timeout(GEMINI_URL_CONTEXT_TIMEOUT_MS),
+      tools: [{ urlContext: {} }],
       responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          company: { type: Type.STRING },
-          jobTitle: { type: Type.STRING },
-          location: { type: Type.STRING },
-          salary: { type: Type.STRING },
-          industry: { type: Type.STRING },
-          summary: { type: Type.STRING },
-          companyMetadata: {
-            type: Type.OBJECT,
-            properties: {
-              headcount: { type: Type.STRING },
-              headquarters: { type: Type.STRING },
-              ownership: { type: Type.STRING },
-              foundingYear: { type: Type.STRING },
-            },
-            required: ['headcount', 'headquarters', 'ownership'],
-          },
-          positionMetadata: {
-            type: Type.OBJECT,
-            properties: {
-              seniority: { type: Type.STRING },
-              department: { type: Type.STRING },
-              employmentType: { type: Type.STRING },
-              requiredSkills: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-              },
-            },
-            required: ['seniority', 'department', 'employmentType', 'requiredSkills'],
-          },
-        },
-        required: [
-          'company',
-          'jobTitle',
-          'location',
-          'salary',
-          'industry',
-          'summary',
-          'companyMetadata',
-          'positionMetadata',
-        ],
-      },
+      responseSchema: JOB_RESPONSE_SCHEMA,
     },
   });
+
+  const retrievals = response.candidates?.[0]?.urlContextMetadata?.urlMetadata || [];
+  const pageWasRead = retrievals.some((m) => m.urlRetrievalStatus === UrlRetrievalStatus.URL_RETRIEVAL_STATUS_SUCCESS);
+  if (!pageWasRead) {
+    const status = retrievals[0]?.urlRetrievalStatus || 'no retrieval reported';
+    throw new Error(`Gemini could not read the posting page (${status}); refusing to guess its contents.`);
+  }
 
   const text = response.text || '{}';
   return JSON.parse(text);
