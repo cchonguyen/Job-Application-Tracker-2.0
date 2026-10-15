@@ -25,6 +25,7 @@ import type { ThemeAccent, ThemeMode } from '../lib/theme';
 import { ThemeSelector } from './ThemeSelector';
 import { ManualJobModal } from './ManualJobModal';
 import { DevSandboxModal } from './DevSandboxModal';
+import { BookmarkletModal } from './BookmarkletModal';
 import { PortalDropdown } from './PortalDropdown';
 import { APP_VERSION, APP_COMMIT, formatBuildTime } from '../lib/appVersion';
 import type { User } from 'firebase/auth';
@@ -80,6 +81,7 @@ export const HeaderActionPanel = ({
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
+  const [isBookmarkletOpen, setIsBookmarkletOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -180,6 +182,18 @@ export const HeaderActionPanel = ({
                     <span>Google Sheets Sync</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSettingsMenuOpen(false);
+                    setIsBookmarkletOpen(true);
+                  }}
+                  className="w-full px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>One-click capture</span>
+                </button>
 
                 <button
                   type="button"
@@ -373,6 +387,11 @@ export const HeaderActionPanel = ({
         onOpenAtsDebugger={onOpenAtsDebugger}
         isIngesting={isIngesting}
       />
+
+      {createPortal(
+        <BookmarkletModal isOpen={isBookmarkletOpen} onClose={() => setIsBookmarkletOpen(false)} />,
+        document.body
+      )}
 
       {/* How Extraction Works Modal rendered via Portal to document.body to avoid header bounds */}
       {isInfoOpen &&
