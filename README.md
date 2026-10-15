@@ -6,7 +6,8 @@ Personal job-application tracker that ingests posting URLs (or pasted descriptio
 
 - Paste a Greenhouse, Lever, or career-page URL to extract company, title, location, salary, and metadata
 - Manual text fallback for SPA / bot-protected portals (e.g. Darwinbox)
-- Track status: Saved → Applied → Interviewing → Offer → Accepted → Rejected
+- One-click capture bookmarklet (Settings › One-click capture) that saves the page you are viewing, including Darwinbox, Workday and LinkedIn
+- Track status: Saved → Applied → Interviewing → Offer → Accepted / Rejected / Declined
 - Search, filter, sort, edit, notes, and CSV/JSON export
 - Import previously exported JSON or CSV (Options → Import JSON / CSV)
 - ATS debugger for multi-tier extraction diagnostics
@@ -62,6 +63,7 @@ Environment variables:
 - `GEMINI_API_KEY` = your Google AI Studio key
 - `SUPABASE_URL` = your Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` = Supabase **service_role** key
+- `API_ACCESS_KEY` = a long random secret (`openssl rand -hex 32`). Required in production: the API returns 503 without it. The app asks for it once per browser.
 
 Then **Manual Deploy**. Confirm logs show `Persistence: Supabase (jobs table)`.
 
