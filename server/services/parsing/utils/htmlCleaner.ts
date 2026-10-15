@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { deriveCompanyFromTitle, slugToCompanyName } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
+import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { ExtractedJobAttributes, ScrapedHtmlData } from '../types.ts';
 
 export const BANNED_HEADERS_REGEX = /^(job\s+description|job\s+summary|job\s+overview|job\s+details|position\s+overview|position\s+summary|role\s+overview|role\s+summary|about\s+the\s+role|about\s+the\s+job|about\s+the\s+team|about\s+us|who\s+we\s+are|what\s+you'?ll\s+do|what\s+you\s+will\s+do|what\s+you\s+bring|what\s+we'?re\s+looking\s+for|what\s+we\s+offer|who\s+you\s+are|responsibilities|key\s+responsibilities|essential\s+duties|qualifications|requirements|minimum\s+qualifications|preferred\s+qualifications|skills\s+and\s+experience|skills|experience|benefits|perks|compensation|total\s+rewards|pay\s+range|salary|location|remote|hybrid|apply\s+now|how\s+to\s+apply|equal\s+opportunity|overview|summary|description|introduction|careers?)$/i;
@@ -165,15 +166,6 @@ export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtml
     rawHtmlStatus: status,
   };
 }
-
-// Deterministic fallbacks only run when no model read the posting. Saved jobs are immutable snapshots,
-// so fields we cannot read are recorded as unknown rather than filled with plausible-looking defaults.
-const UNKNOWN_COMPANY_METADATA = {
-  headcount: 'Unknown',
-  headquarters: 'Unknown',
-  ownership: 'Unknown',
-  foundingYear: 'Unknown',
-};
 
 export function parseManualTextDeterministically(text: string, targetUrl?: string): ExtractedJobAttributes {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -344,7 +336,7 @@ export function parseManualTextDeterministically(text: string, targetUrl?: strin
     salaryMax: salary.salaryMax,
     industry,
     summary: cleanSummary || `${company} is hiring for the role of ${jobTitle}.`,
-    companyMetadata: UNKNOWN_COMPANY_METADATA,
+    companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
     positionMetadata: {
       seniority,
       department,
@@ -439,7 +431,7 @@ export function parseUrlDeterministically(urlStr: string, scraped?: ScrapedHtmlD
       scraped?.ogDescription ||
       scraped?.metaDescription ||
       `The posting page could not be read automatically. Company and title were taken from the link; open the posting to review the details.`,
-    companyMetadata: UNKNOWN_COMPANY_METADATA,
+    companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
     positionMetadata: {
       seniority: isSr ? 'Senior' : 'Mid-level',
       department,

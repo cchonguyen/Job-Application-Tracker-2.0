@@ -3,6 +3,7 @@ import { extractSalaryFromTextOrJson, formatIntegerToK } from '../../../../src/l
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 
 interface AshbyCompensationComponent {
   compensationType?: string;
@@ -170,20 +171,15 @@ export class AshbyProvider implements AtsProvider {
         salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
         salaryMin: parsedSalary.salaryMin,
         salaryMax: parsedSalary.salaryMax,
-        industry: 'Technology & Software',
+        industry: 'Unknown',
         summary: description
           ? description.slice(0, 450) + (description.length > 450 ? '...' : '')
           : `${companyHint} is recruiting for the role of ${fallbackTitle}. Direct position fetched via the official Ashby job posting API.`,
-        companyMetadata: {
-          headcount: 'Unknown',
-          headquarters: 'Unknown',
-          ownership: 'Private',
-          foundingYear: 'Unknown',
-        },
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
         positionMetadata: {
           seniority: isSr ? 'Senior' : 'Mid-level',
-          department: posting.department || 'Product & Engineering',
-          employmentType: EMPLOYMENT_TYPE_LABELS[posting.employmentType || ''] || 'Full-time',
+          department: posting.department || 'Unknown',
+          employmentType: EMPLOYMENT_TYPE_LABELS[posting.employmentType || ''] || 'Unknown',
           requiredSkills: [],
         },
       };

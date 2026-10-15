@@ -4,7 +4,7 @@ import { LeverProvider } from '../../../server/services/parsing/providers/lever.
 import { WorkableProvider } from '../../../server/services/parsing/providers/workable.provider.ts';
 import { JobParsingEngine } from '../../../server/services/parsing/index.ts';
 import { parseManualTextDeterministically, parseUrlDeterministically } from '../../../server/services/parsing/utils/htmlCleaner.ts';
-import { needsManualReview } from '../formatHelpers.ts';
+import { companyFactsForDisplay, needsManualReview } from '../formatHelpers.ts';
 
 describe('Modular Parsing Engine', () => {
   it('instantiates provider instances and verifies signature handling', () => {
@@ -104,5 +104,19 @@ describe('Deterministic fallbacks never invent details', () => {
     expect(needsManualReview('Resilient DOM Parser (Free Tier Safety)')).toBe(true);
     expect(needsManualReview('Greenhouse API')).toBe(false);
     expect(needsManualReview(undefined)).toBe(false);
+  });
+});
+
+describe('Company facts display', () => {
+  it('shows the old hard-coded placeholder trio as Unknown', () => {
+    expect(
+      companyFactsForDisplay({ headcount: '1,000+ employees', headquarters: 'United States', ownership: 'Private', foundingYear: 'Unknown' })
+    ).toEqual({ headcount: 'Unknown', headquarters: 'Unknown', ownership: 'Unknown', foundingYear: 'Unknown' });
+  });
+
+  it('keeps real company facts', () => {
+    expect(
+      companyFactsForDisplay({ headcount: '7,000+ employees', headquarters: 'San Francisco, CA', ownership: 'Private', foundingYear: 2010 })
+    ).toEqual({ headcount: '7,000+ employees', headquarters: 'San Francisco, CA', ownership: 'Private', foundingYear: '2010' });
   });
 });
