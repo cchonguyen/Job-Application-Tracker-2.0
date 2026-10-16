@@ -7,6 +7,7 @@ import {
   isAppliedWithinPastMonths,
   findPastSixMonthsDuplicates,
   normalizeJobUrl,
+  atsCompanySlug,
   formatTimeAgo,
 } from '../duplicateDetection';
 import type { JobRecord } from '../../types';
@@ -28,6 +29,19 @@ describe('duplicateDetection', () => {
       expect(isCompanyMatch('Google', 'Google LLC')).toBe(true);
       expect(isCompanyMatch('Veeva Systems', 'Veeva')).toBe(true);
       expect(isCompanyMatch('Mavenclinic', 'Maven Clinic')).toBe(true);
+    });
+
+    it('tolerates small spelling differences in longer names', () => {
+      expect(isCompanyMatch('Maven Clinc', 'Maven Clinic')).toBe(true);
+      expect(isCompanyMatch('Open AI', 'OpenAI, Inc.')).toBe(true);
+      expect(isCompanyMatch('Databricks', 'Databrick')).toBe(true);
+      expect(isCompanyMatch('Atlassian', 'Atlasian')).toBe(true);
+    });
+
+    it('keeps short, similar names distinct', () => {
+      expect(isCompanyMatch('Stripe', 'Strive')).toBe(false);
+      expect(isCompanyMatch('Lyft', 'Lift')).toBe(false);
+      expect(isCompanyMatch('Atticus', 'Mavenclinic')).toBe(false);
     });
 
     it('never matches placeholder company names', () => {
@@ -65,11 +79,28 @@ describe('duplicateDetection', () => {
       expect(isRoleMatch('Sr. Product Manager', 'Senior Product Manager')).toBe(true);
     });
 
+    it('matches reordered or reworded titles', () => {
+      expect(isRoleMatch('Product Manager, Growth', 'Growth Product Manager')).toBe(true);
+      expect(isRoleMatch('Software Developer', 'Software Engineer')).toBe(true);
+      expect(isRoleMatch('Senior Product Manger', 'Senior Product Manager')).toBe(true);
+      expect(isRoleMatch('Director of Product Management', 'Director, Product Management')).toBe(true);
+    });
+
     it('treats different seniority or different teams as different roles', () => {
       expect(isRoleMatch('Product Manager', 'Senior Product Manager')).toBe(false);
       expect(isRoleMatch('Software Engineer II', 'Software Engineer III')).toBe(false);
       expect(isRoleMatch('Product Manager, Growth', 'Product Manager, Payments')).toBe(false);
       expect(isRoleMatch('Data Engineer', 'Data Engineering Manager')).toBe(false);
+    });
+  });
+
+  describe('atsCompanySlug', () => {
+    it('reads the company from hosted job board URLs', () => {
+      expect(atsCompanySlug('https://job-boards.greenhouse.io/mavenclinic/jobs/88')).toBe('mavenclinic');
+      expect(atsCompanySlug('https://jobs.ashbyhq.com/atticus/67f7fa65')).toBe('atticus');
+      expect(atsCompanySlug('https://jobs.lever.co/acme/abc')).toBe('acme');
+      expect(atsCompanySlug('https://acme.wd5.myworkdayjobs.com/x')).toBe('');
+      expect(atsCompanySlug('https://example.com/careers/1')).toBe('');
     });
   });
 
@@ -237,6 +268,24 @@ describe('duplicateDetection', () => {
       expect(duplicates.length).toBe(1);
       expect(duplicates[0].existingJob.id).toBe('job-veeva');
       expect(duplicates[0].reason).toContain('same posting');
+    });
+
+    it('matches the company through the job board when names were extracted differently', () => {
+      const existing: JobRecord = {
+        ...existingJobs[0],
+        id: 'job-maven',
+        company: 'Maven Clinic',
+        jobTitle: 'Product Manager',
+        url: 'https://job-boards.greenhouse.io/mavenclinic/jobs/1',
+      };
+      const candidate = {
+        company: 'Maven',
+        jobTitle: 'Senior Product Manager',
+        url: 'https://boards.greenhouse.io/mavenclinic/jobs/2',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, [existing], refDate, 6);
+      expect(duplicates.length).toBe(1);
+      expect(duplicates[0].matchType).toBe('company');
     });
 
     it('does not flag two jobs whose company was never extracted', () => {

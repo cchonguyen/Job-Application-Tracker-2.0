@@ -94,7 +94,64 @@ export function isCompanyMatch(companyA?: string | null, companyB?: string | nul
     return true;
   }
 
-  return false;
+  // Small spelling differences from extraction ("Maven Clinc", "Doordash"
+  // vs "DoorDash Inc", "Openai" vs "Open AI"). Short names need an exact
+  // match so "Stripe" and "Strive" stay distinct.
+  return isNearMatch(normA.replace(/ /g, ''), normB.replace(/ /g, ''));
+}
+
+/** Levenshtein edit distance, stopping early once it exceeds `max`. */
+export function editDistance(a: string, b: string, max = Infinity): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      rowMin = Math.min(rowMin, curr[j]);
+    }
+    if (rowMin > max) return max + 1;
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Typo-tolerant equality: one edit allowed from 7 characters, two from 12.
+ */
+function isNearMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const len = Math.min(a.length, b.length);
+  const allowed = len >= 12 ? 2 : len >= 7 ? 1 : 0;
+  return allowed > 0 && editDistance(a, b, allowed) <= allowed;
+}
+
+/**
+ * Pulls the company slug from hosted ATS job board URLs, e.g.
+ * job-boards.greenhouse.io/mavenclinic/jobs/1 -> "mavenclinic". Lets two
+ * postings from the same board match even when the company name was
+ * extracted differently.
+ */
+export function atsCompanySlug(url?: string | null): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url.trim().includes('://') ? url.trim() : `https://${url.trim()}`);
+    const host = parsed.hostname.toLowerCase();
+    const first = parsed.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || '';
+    if (/(^|\.)greenhouse\.io$/.test(host)) {
+      return first === 'embed' ? (parsed.searchParams.get('for') || '').toLowerCase() : first;
+    }
+    if (/^(jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com|jobs\.smartrecruiters\.com)$/.test(host)) {
+      return first;
+    }
+    const sub = host.match(/^([a-z0-9-]+)\.(recruitee\.com|breezy\.hr|bamboohr\.com|myworkdayjobs\.com)$/);
+    if (sub) return sub[1];
+  } catch {
+    // Not a URL; no slug.
+  }
+  return '';
 }
 
 /**
@@ -173,6 +230,38 @@ function seniorityKey(tokens: string[]): string {
   return tokens.filter((t) => SENIORITY_TOKENS.has(t)).sort().join(' ');
 }
 
+/** Filler words ignored when comparing title wording. */
+const ROLE_FILLER = new Set(['of', 'and', 'the', 'for', 'to', 'in', 'at', 'a', 'an', '&']);
+
+/** Wording variants that mean the same job. */
+const ROLE_SYNONYMS: Record<string, string> = {
+  developer: 'engineer',
+  dev: 'engineer',
+  management: 'manager',
+  mgmt: 'manager',
+};
+
+function roleTokensMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  // One typo in a longer word ("Manger", "Enginer")
+  return Math.min(a.length, b.length) >= 5 && editDistance(a, b, 1) <= 1;
+}
+
+/**
+ * Share of distinct title words the two titles have in common (0–1),
+ * ignoring order and filler words, with one-typo tolerance per word.
+ */
+function roleWordOverlap(wordsA: string[], wordsB: string[]): number {
+  const clean = (ws: string[]) => [
+    ...new Set(ws.filter((w) => !ROLE_FILLER.has(w)).map((w) => ROLE_SYNONYMS[w] || w)),
+  ];
+  const a = clean(wordsA);
+  const b = clean(wordsB);
+  if (a.length === 0 || b.length === 0) return 0;
+  const shared = a.filter((wa) => b.some((wb) => roleTokensMatch(wa, wb))).length;
+  return shared / (a.length + b.length - shared);
+}
+
 /** True when `needle` appears as a contiguous run of whole words inside `haystack`. */
 function containsTokenRun(haystack: string[], needle: string[]): boolean {
   if (needle.length === 0 || needle.length > haystack.length) return false;
@@ -202,8 +291,12 @@ export function isRoleMatch(roleA?: string | null, roleB?: string | null): boole
   // Containment needs a title of at least two words, so "Manager" alone
   // never swallows every manager role.
   const [shorter, longer] = wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
-  if (shorter.length < 2) return false;
-  return containsTokenRun(longer, shorter);
+  if (shorter.length >= 2 && containsTokenRun(longer, shorter)) return true;
+
+  // Same words in a different order or slightly different wording:
+  // "Product Manager, Growth" vs "Growth Product Manager",
+  // "Software Developer" vs "Software Engineer".
+  return roleWordOverlap(wordsA, wordsB) >= 0.75;
 }
 
 /**
@@ -324,11 +417,10 @@ export function findPastSixMonthsDuplicates(
 
     const urlA = normalizeJobUrl(candidate.url);
     const urlMatch = Boolean(urlA && urlA === normalizeJobUrl(existing.url));
-    const compMatch = Boolean(
-      candidate.company &&
-        !isPlaceholder(normalizeCompany(candidate.company)) &&
-        isCompanyMatch(candidate.company, existing.company)
-    );
+    const slugA = atsCompanySlug(candidate.url);
+    const compMatch =
+      Boolean(candidate.company && isCompanyMatch(candidate.company, existing.company)) ||
+      Boolean(slugA && slugA === atsCompanySlug(existing.url));
     const roleMatch = compMatch && isRoleMatch(candidate.jobTitle, existing.jobTitle);
 
     // The same title at a different company is a normal part of a job search
