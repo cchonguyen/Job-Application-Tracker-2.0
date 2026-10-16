@@ -6,6 +6,8 @@ import {
   isRoleMatch,
   isAppliedWithinPastMonths,
   findPastSixMonthsDuplicates,
+  normalizeJobUrl,
+  atsCompanySlug,
   formatTimeAgo,
 } from '../duplicateDetection';
 import type { JobRecord } from '../../types';
@@ -26,6 +28,25 @@ describe('duplicateDetection', () => {
       expect(isCompanyMatch('Airbnb LLC', 'Airbnb')).toBe(true);
       expect(isCompanyMatch('Google', 'Google LLC')).toBe(true);
       expect(isCompanyMatch('Veeva Systems', 'Veeva')).toBe(true);
+      expect(isCompanyMatch('Mavenclinic', 'Maven Clinic')).toBe(true);
+    });
+
+    it('tolerates small spelling differences in longer names', () => {
+      expect(isCompanyMatch('Maven Clinc', 'Maven Clinic')).toBe(true);
+      expect(isCompanyMatch('Open AI', 'OpenAI, Inc.')).toBe(true);
+      expect(isCompanyMatch('Databricks', 'Databrick')).toBe(true);
+      expect(isCompanyMatch('Atlassian', 'Atlasian')).toBe(true);
+    });
+
+    it('keeps short, similar names distinct', () => {
+      expect(isCompanyMatch('Stripe', 'Strive')).toBe(false);
+      expect(isCompanyMatch('Lyft', 'Lift')).toBe(false);
+      expect(isCompanyMatch('Atticus', 'Mavenclinic')).toBe(false);
+    });
+
+    it('never matches placeholder company names', () => {
+      expect(isCompanyMatch('Unknown', 'Unknown')).toBe(false);
+      expect(isCompanyMatch('Unknown Company', 'Unknown')).toBe(false);
     });
 
     it('rejects completely different companies', () => {
@@ -51,6 +72,51 @@ describe('duplicateDetection', () => {
       expect(
         isRoleMatch('Product Manager', 'Chief Financial Officer')
       ).toBe(false);
+    });
+
+    it('matches a title with a team suffix and expands abbreviations', () => {
+      expect(isRoleMatch('Senior Product Manager', 'Senior Product Manager - Care Delivery')).toBe(true);
+      expect(isRoleMatch('Sr. Product Manager', 'Senior Product Manager')).toBe(true);
+    });
+
+    it('matches reordered or reworded titles', () => {
+      expect(isRoleMatch('Product Manager, Growth', 'Growth Product Manager')).toBe(true);
+      expect(isRoleMatch('Software Developer', 'Software Engineer')).toBe(true);
+      expect(isRoleMatch('Senior Product Manger', 'Senior Product Manager')).toBe(true);
+      expect(isRoleMatch('Director of Product Management', 'Director, Product Management')).toBe(true);
+    });
+
+    it('treats different seniority or different teams as different roles', () => {
+      expect(isRoleMatch('Product Manager', 'Senior Product Manager')).toBe(false);
+      expect(isRoleMatch('Software Engineer II', 'Software Engineer III')).toBe(false);
+      expect(isRoleMatch('Product Manager, Growth', 'Product Manager, Payments')).toBe(false);
+      expect(isRoleMatch('Data Engineer', 'Data Engineering Manager')).toBe(false);
+    });
+  });
+
+  describe('atsCompanySlug', () => {
+    it('reads the company from hosted job board URLs', () => {
+      expect(atsCompanySlug('https://job-boards.greenhouse.io/mavenclinic/jobs/88')).toBe('mavenclinic');
+      expect(atsCompanySlug('https://jobs.ashbyhq.com/atticus/67f7fa65')).toBe('atticus');
+      expect(atsCompanySlug('https://jobs.lever.co/acme/abc')).toBe('acme');
+      expect(atsCompanySlug('https://acme.wd5.myworkdayjobs.com/x')).toBe('');
+      expect(atsCompanySlug('https://example.com/careers/1')).toBe('');
+    });
+  });
+
+  describe('normalizeJobUrl', () => {
+    it('ignores protocol, www, tracking params, fragments and trailing slashes', () => {
+      expect(normalizeJobUrl('https://www.example.com/jobs/123/?utm_source=linkedin#apply')).toBe(
+        'example.com/jobs/123'
+      );
+      expect(normalizeJobUrl('http://example.com/jobs/123')).toBe('example.com/jobs/123');
+    });
+
+    it('keeps query params that identify the job', () => {
+      expect(normalizeJobUrl('https://acme.com/careers?gh_jid=42&utm_source=x')).toBe('acme.com/careers?gh_jid=42');
+      expect(normalizeJobUrl('https://acme.com/careers?gh_jid=42')).not.toBe(
+        normalizeJobUrl('https://acme.com/careers?gh_jid=43')
+      );
     });
   });
 
@@ -159,7 +225,7 @@ describe('duplicateDetection', () => {
       expect(duplicates[0].daysAgo).toBe(17);
     });
 
-    it('flags duplicate company even if role is different', () => {
+    it('flags the same company even if role is different', () => {
       const candidate = {
         company: 'Veeva',
         jobTitle: 'Director of Product Management',
@@ -167,18 +233,71 @@ describe('duplicateDetection', () => {
       const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
       expect(duplicates.length).toBe(1);
       expect(duplicates[0].matchType).toBe('company');
-      expect(duplicates[0].matchedFields).toContain('company');
+      expect(duplicates[0].matchedFields).toEqual(['company']);
     });
 
-    it('flags duplicate role even if company is different', () => {
+    it('ranks the same role ahead of other roles at the company', () => {
+      const otherRole: JobRecord = {
+        ...existingJobs[0],
+        id: 'job-veeva-2',
+        jobTitle: 'Product Manager',
+        dateApplied: '2026-10-05',
+        url: 'https://careers.veeva.com/job/999',
+      };
+      const candidate = { company: 'Veeva', jobTitle: 'Senior Product Manager' };
+      const duplicates = findPastSixMonthsDuplicates(candidate, [otherRole, existingJobs[0]], refDate, 6);
+      expect(duplicates.map((d) => d.existingJob.id)).toEqual(['job-veeva', 'job-veeva-2']);
+      expect(duplicates.map((d) => d.matchType)).toEqual(['both', 'company']);
+    });
+
+    it('does not flag the same role at a different company', () => {
       const candidate = {
         company: 'Acme Health',
         jobTitle: 'Senior Product Manager',
       };
+      expect(findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6)).toEqual([]);
+    });
+
+    it('flags the same posting URL even when company or title were extracted differently', () => {
+      const candidate = {
+        company: 'Unknown',
+        jobTitle: 'Unknown',
+        url: 'https://careers.veeva.com/job/123/?utm_source=linkedin',
+      };
       const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
       expect(duplicates.length).toBe(1);
-      expect(duplicates[0].matchType).toBe('role');
-      expect(duplicates[0].matchedFields).toContain('role');
+      expect(duplicates[0].existingJob.id).toBe('job-veeva');
+      expect(duplicates[0].reason).toContain('same posting');
+    });
+
+    it('matches the company through the job board when names were extracted differently', () => {
+      const existing: JobRecord = {
+        ...existingJobs[0],
+        id: 'job-maven',
+        company: 'Maven Clinic',
+        jobTitle: 'Product Manager',
+        url: 'https://job-boards.greenhouse.io/mavenclinic/jobs/1',
+      };
+      const candidate = {
+        company: 'Maven',
+        jobTitle: 'Senior Product Manager',
+        url: 'https://boards.greenhouse.io/mavenclinic/jobs/2',
+      };
+      const duplicates = findPastSixMonthsDuplicates(candidate, [existing], refDate, 6);
+      expect(duplicates.length).toBe(1);
+      expect(duplicates[0].matchType).toBe('company');
+    });
+
+    it('does not flag two jobs whose company was never extracted', () => {
+      const unknownJob: JobRecord = {
+        ...existingJobs[0],
+        id: 'job-unknown',
+        company: 'Unknown',
+        jobTitle: 'Product Manager',
+        url: 'https://boards.example.com/a',
+      };
+      const candidate = { company: 'Unknown', jobTitle: 'Product Manager', url: 'https://boards.example.com/b' };
+      expect(findPastSixMonthsDuplicates(candidate, [unknownJob], refDate, 6)).toEqual([]);
     });
 
     it('does NOT flag jobs applied outside past 6 months', () => {
