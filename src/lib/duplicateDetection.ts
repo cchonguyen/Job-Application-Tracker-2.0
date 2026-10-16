@@ -70,6 +70,7 @@ export function normalizeCompany(name?: string | null): string {
  */
 export function isCompanyMatch(companyA?: string | null, companyB?: string | null): boolean {
   if (!companyA || !companyB) return false;
+  if (isPlaceholder(normalizeCompany(companyA)) || isPlaceholder(normalizeCompany(companyB))) return false;
   const rawA = companyA.toLowerCase().trim();
   const rawB = companyB.toLowerCase().trim();
   if (rawA === rawB) return true;
@@ -78,6 +79,8 @@ export function isCompanyMatch(companyA?: string | null, companyB?: string | nul
   const normB = normalizeCompany(companyB);
   if (!normA || !normB) return false;
   if (normA === normB) return true;
+  // "Mavenclinic" vs "Maven Clinic"
+  if (normA.replace(/ /g, '') === normB.replace(/ /g, '')) return true;
 
   const tokensA = normA.split(' ').filter(Boolean);
   const tokensB = normB.split(' ').filter(Boolean);
@@ -95,8 +98,60 @@ export function isCompanyMatch(companyA?: string | null, companyB?: string | nul
 }
 
 /**
+ * Values the extractor stores when it could not read a company or title. Two
+ * jobs that both say "Unknown" say nothing about being the same posting.
+ */
+const PLACEHOLDER_VALUES = new Set(['unknown', 'n a', 'na', 'none', 'not listed', 'tbd', 'confidential']);
+
+function isPlaceholder(normalized: string): boolean {
+  return !normalized || PLACEHOLDER_VALUES.has(normalized);
+}
+
+/** Common title abbreviations, expanded so "Sr. PM" style titles compare cleanly. */
+const ROLE_ABBREVIATIONS: Record<string, string> = {
+  sr: 'senior',
+  snr: 'senior',
+  jr: 'junior',
+  mgr: 'manager',
+  eng: 'engineer',
+  swe: 'software engineer',
+  pm: 'product manager',
+  vp: 'vice president',
+};
+
+/**
+ * Seniority markers. Two titles that differ only in these ("Product Manager"
+ * vs "Senior Product Manager") are different openings, not the same one.
+ */
+const SENIORITY_TOKENS = new Set([
+  'intern',
+  'junior',
+  'associate',
+  'senior',
+  'staff',
+  'principal',
+  'lead',
+  'head',
+  'director',
+  'vice',
+  'president',
+  'chief',
+  'i',
+  'ii',
+  'iii',
+  'iv',
+  'v',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+]);
+
+/**
  * Normalizes a role / job title.
- * Removes parenthetical locations, seniority brackets, extra symbols.
+ * Removes parenthetical locations, seniority brackets, extra symbols and
+ * expands common abbreviations.
  */
 export function normalizeRole(title?: string | null): string {
   if (!title) return '';
@@ -105,34 +160,74 @@ export function normalizeRole(title?: string | null): string {
   cleaned = cleaned.replace(/[\(\[][^\)\]]*[\)\]]/g, ' ');
   // Strip punctuation
   cleaned = cleaned.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()'"@+?|–—]/g, ' ');
-  // Collapse whitespace
+  // Collapse whitespace and expand abbreviations
   return cleaned
     .split(/\s+/)
     .map((w) => w.trim())
     .filter(Boolean)
+    .map((w) => ROLE_ABBREVIATIONS[w] || w)
     .join(' ');
 }
 
+function seniorityKey(tokens: string[]): string {
+  return tokens.filter((t) => SENIORITY_TOKENS.has(t)).sort().join(' ');
+}
+
+/** True when `needle` appears as a contiguous run of whole words inside `haystack`. */
+function containsTokenRun(haystack: string[], needle: string[]): boolean {
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+  for (let i = 0; i + needle.length <= haystack.length; i++) {
+    if (needle.every((t, j) => haystack[i + j] === t)) return true;
+  }
+  return false;
+}
+
 /**
- * Determines whether two job titles / roles match.
+ * Determines whether two job titles describe the same opening.
+ * Titles must share the same seniority, and one must equal the other or
+ * contain it whole (e.g. "Senior Product Manager" vs
+ * "Senior Product Manager - Care Delivery").
  */
 export function isRoleMatch(roleA?: string | null, roleB?: string | null): boolean {
   if (!roleA || !roleB) return false;
   const normA = normalizeRole(roleA);
   const normB = normalizeRole(roleB);
-  if (!normA || !normB) return false;
+  if (isPlaceholder(normA) || isPlaceholder(normB)) return false;
   if (normA === normB) return true;
 
-  // Check multi-word phrase containment (e.g. "Senior Product Manager" matches "Senior Product Manager - Care")
   const wordsA = normA.split(' ');
   const wordsB = normB.split(' ');
-  if (wordsA.length >= 2 && wordsB.length >= 2) {
-    if (normA.includes(normB) || normB.includes(normA)) {
-      return true;
-    }
-  }
+  if (seniorityKey(wordsA) !== seniorityKey(wordsB)) return false;
 
-  return false;
+  // Containment needs a title of at least two words, so "Manager" alone
+  // never swallows every manager role.
+  const [shorter, longer] = wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
+  if (shorter.length < 2) return false;
+  return containsTokenRun(longer, shorter);
+}
+
+/**
+ * Normalizes a posting URL so the same listing compares equal regardless of
+ * protocol, "www.", tracking parameters, fragments or a trailing slash.
+ * Query parameters that identify the job (gh_jid, jobId, etc.) are kept.
+ */
+export function normalizeJobUrl(url?: string | null): string {
+  if (!url) return '';
+  const raw = url.trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname.replace(/\/+$/, '').toLowerCase();
+    const keep = [...parsed.searchParams.entries()]
+      .filter(([k]) => /^(gh_jid|jid|job_?id|id|req(uisition)?_?id|posting_?id)$/i.test(k))
+      .map(([k, v]) => `${k.toLowerCase()}=${v}`)
+      .sort()
+      .join('&');
+    return `${host}${path}${keep ? `?${keep}` : ''}`;
+  } catch {
+    return raw.toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  }
 }
 
 /**
@@ -194,8 +289,10 @@ export function isAppliedWithinPastMonths(
 }
 
 /**
- * Scans existing tracker jobs and returns all matches for potentially duplicate
- * roles or companies from any application applied during the past 6 months.
+ * Scans existing tracker jobs and returns applications from the past 6 months
+ * that look like the same opening: the same posting URL, or the same company
+ * with the same role. Matches are informational; a confirmed re-ingest is
+ * always saved as a new row.
  */
 export function findPastSixMonthsDuplicates(
   candidate: { company?: string; jobTitle?: string; url?: string; id?: string },
@@ -225,53 +322,35 @@ export function findPastSixMonthsDuplicates(
     const appliedDateStr = existing.dateApplied || (appDate ? appDate.toISOString().split('T')[0] : 'Past 6 months');
     const timeAgoLabel = formatTimeAgo(daysAgo);
 
-    const compMatch = Boolean(candidate.company && isCompanyMatch(candidate.company, existing.company));
-    const roleMatch = Boolean(candidate.jobTitle && isRoleMatch(candidate.jobTitle, existing.jobTitle));
-    const urlMatch = Boolean(
-      candidate.url &&
-      existing.url &&
-      candidate.url.trim().toLowerCase() === existing.url.trim().toLowerCase()
+    const urlA = normalizeJobUrl(candidate.url);
+    const urlMatch = Boolean(urlA && urlA === normalizeJobUrl(existing.url));
+    const compMatch = Boolean(
+      candidate.company &&
+        !isPlaceholder(normalizeCompany(candidate.company)) &&
+        isCompanyMatch(candidate.company, existing.company)
     );
+    const roleMatch = compMatch && isRoleMatch(candidate.jobTitle, existing.jobTitle);
 
-    if (compMatch || roleMatch || urlMatch) {
-      let matchType: DuplicateMatchType;
-      const matchedFields: ('company' | 'role')[] = [];
-      let reason = '';
+    // Only the same posting (URL) or the same role at the same company counts.
+    // Same company with a different role, or the same title at another
+    // company, is a normal part of a job search and is not flagged.
+    if (!urlMatch && !roleMatch) continue;
 
-      if (urlMatch || (compMatch && roleMatch)) {
-        matchType = 'both';
-        matchedFields.push('company', 'role');
-        reason = `Applied for the same role (${existing.jobTitle}) at ${existing.company} ${timeAgoLabel}`;
-      } else if (compMatch) {
-        matchType = 'company';
-        matchedFields.push('company');
-        reason = `Applied to ${existing.company} for "${existing.jobTitle}" ${timeAgoLabel}`;
-      } else {
-        matchType = 'role';
-        matchedFields.push('role');
-        reason = `Applied for the matching role "${existing.jobTitle}" at ${existing.company} ${timeAgoLabel}`;
-      }
-
-      matches.push({
-        existingJob: existing,
-        matchType,
-        matchedFields,
-        appliedDateStr,
-        daysAgo,
-        timeAgoLabel,
-        reason,
-      });
-    }
+    matches.push({
+      existingJob: existing,
+      matchType: 'both',
+      matchedFields: ['company', 'role'],
+      appliedDateStr,
+      daysAgo,
+      timeAgoLabel,
+      reason: urlMatch
+        ? `Applied to this same posting (${existing.jobTitle} at ${existing.company}) ${timeAgoLabel}`
+        : `Applied for the same role (${existing.jobTitle}) at ${existing.company} ${timeAgoLabel}`,
+    });
   }
 
-  // Sort matches: 'both' first, then 'company', then 'role', and within that by newest applied date (smallest daysAgo)
-  matches.sort((a, b) => {
-    const priority = { both: 0, company: 1, role: 2 };
-    if (priority[a.matchType] !== priority[b.matchType]) {
-      return priority[a.matchType] - priority[b.matchType];
-    }
-    return a.daysAgo - b.daysAgo;
-  });
+  // Newest application first
+  matches.sort((a, b) => a.daysAgo - b.daysAgo);
 
   return matches;
 }

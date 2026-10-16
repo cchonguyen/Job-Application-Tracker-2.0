@@ -87,7 +87,7 @@ export const DuplicateWarningModal = ({
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-1">
-                You applied to a matching role or company during the past 6 months. Review the comparison below before continuing.
+                You applied for this same role at this company during the past 6 months. Review the comparison below before continuing.
               </p>
             </div>
           </div>
