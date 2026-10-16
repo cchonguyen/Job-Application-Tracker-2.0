@@ -290,8 +290,8 @@ export function isAppliedWithinPastMonths(
 
 /**
  * Scans existing tracker jobs and returns applications from the past 6 months
- * that look like the same opening: the same posting URL, or the same company
- * with the same role. Matches are informational; a confirmed re-ingest is
+ * at the same company (same role ranked first) or with the same posting URL.
+ * The same title at a different company is not a match. Matches are informational; a confirmed re-ingest is
  * always saved as a new row.
  */
 export function findPastSixMonthsDuplicates(
@@ -331,26 +331,32 @@ export function findPastSixMonthsDuplicates(
     );
     const roleMatch = compMatch && isRoleMatch(candidate.jobTitle, existing.jobTitle);
 
-    // Only the same posting (URL) or the same role at the same company counts.
-    // Same company with a different role, or the same title at another
-    // company, is a normal part of a job search and is not flagged.
-    if (!urlMatch && !roleMatch) continue;
+    // The same title at a different company is a normal part of a job search
+    // and is not flagged. Any role at the same company is, since one
+    // application there can be considered for several openings.
+    if (!urlMatch && !compMatch) continue;
 
+    const sameRole = urlMatch || roleMatch;
     matches.push({
       existingJob: existing,
-      matchType: 'both',
-      matchedFields: ['company', 'role'],
+      matchType: sameRole ? 'both' : 'company',
+      matchedFields: sameRole ? ['company', 'role'] : ['company'],
       appliedDateStr,
       daysAgo,
       timeAgoLabel,
       reason: urlMatch
         ? `Applied to this same posting (${existing.jobTitle} at ${existing.company}) ${timeAgoLabel}`
-        : `Applied for the same role (${existing.jobTitle}) at ${existing.company} ${timeAgoLabel}`,
+        : roleMatch
+        ? `Applied for the same role (${existing.jobTitle}) at ${existing.company} ${timeAgoLabel}`
+        : `Applied to ${existing.company} for "${existing.jobTitle}" ${timeAgoLabel}`,
     });
   }
 
-  // Newest application first
-  matches.sort((a, b) => a.daysAgo - b.daysAgo);
+  // Same role first, then other roles at the company; newest first within each
+  matches.sort((a, b) => {
+    if (a.matchType !== b.matchType) return a.matchType === 'both' ? -1 : 1;
+    return a.daysAgo - b.daysAgo;
+  });
 
   return matches;
 }

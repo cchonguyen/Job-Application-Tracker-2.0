@@ -194,12 +194,29 @@ describe('duplicateDetection', () => {
       expect(duplicates[0].daysAgo).toBe(17);
     });
 
-    it('does not flag the same company with a different role', () => {
+    it('flags the same company even if role is different', () => {
       const candidate = {
         company: 'Veeva',
         jobTitle: 'Director of Product Management',
       };
-      expect(findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6)).toEqual([]);
+      const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
+      expect(duplicates.length).toBe(1);
+      expect(duplicates[0].matchType).toBe('company');
+      expect(duplicates[0].matchedFields).toEqual(['company']);
+    });
+
+    it('ranks the same role ahead of other roles at the company', () => {
+      const otherRole: JobRecord = {
+        ...existingJobs[0],
+        id: 'job-veeva-2',
+        jobTitle: 'Product Manager',
+        dateApplied: '2026-10-05',
+        url: 'https://careers.veeva.com/job/999',
+      };
+      const candidate = { company: 'Veeva', jobTitle: 'Senior Product Manager' };
+      const duplicates = findPastSixMonthsDuplicates(candidate, [otherRole, existingJobs[0]], refDate, 6);
+      expect(duplicates.map((d) => d.existingJob.id)).toEqual(['job-veeva', 'job-veeva-2']);
+      expect(duplicates.map((d) => d.matchType)).toEqual(['both', 'company']);
     });
 
     it('does not flag the same role at a different company', () => {
