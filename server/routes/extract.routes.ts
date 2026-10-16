@@ -7,6 +7,7 @@ import { initialDateAppliedForStatus } from '../../src/lib/jobDates.ts';
 import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
 import { parseJobTitleAndTeam } from '../../src/lib/jobsStore.ts';
 import { findPastSixMonthsDuplicates } from '../../src/lib/duplicateDetection.ts';
+import { resolveCompanyFacts } from '../services/company/companyFacts.ts';
 
 export const extractRouter = Router();
 
@@ -54,6 +55,15 @@ extractRouter.post('/extract-job', async (req, res) => {
 
   try {
     const nowIso = new Date().toISOString();
+    const existingJobs = await jobRepository.listJobs();
+    const company = extractedData.company || 'Unknown Company';
+    const companyMetadata = await resolveCompanyFacts({
+      company,
+      extracted: extractedData.companyMetadata,
+      existingJobs,
+      jobUrl: url,
+      jobTitle: extractedData.jobTitle,
+    });
     const parsedRoleTeam = parseJobTitleAndTeam(
       extractedData.jobTitle || 'Unknown Role',
       extractedData.team
@@ -61,7 +71,7 @@ extractRouter.post('/extract-job', async (req, res) => {
 
     const newJobRecord = {
       id: `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      company: extractedData.company || 'Unknown Company',
+      company,
       jobTitle: parsedRoleTeam.jobTitle || 'Unknown Role',
       team: parsedRoleTeam.team || extractedData.team || undefined,
       location: extractedData.location || 'Not listed',
@@ -74,12 +84,7 @@ extractRouter.post('/extract-job', async (req, res) => {
       industry: extractedData.industry || 'Unknown',
       summary: extractedData.summary || '',
       url: url || '',
-      companyMetadata: {
-        headcount: extractedData.companyMetadata?.headcount || 'Unknown',
-        headquarters: extractedData.companyMetadata?.headquarters || 'Unknown',
-        ownership: extractedData.companyMetadata?.ownership || 'Unknown',
-        foundingYear: extractedData.companyMetadata?.foundingYear || 'Unknown',
-      },
+      companyMetadata,
       positionMetadata: {
         seniority: extractedData.positionMetadata?.seniority || 'Unknown',
         department: extractedData.positionMetadata?.department || 'Unknown',
@@ -94,7 +99,6 @@ extractRouter.post('/extract-job', async (req, res) => {
 
     // Check for potential duplicate role or company applied during the past 6 months
     if (!confirmDuplicate) {
-      const existingJobs = await jobRepository.listJobs();
       const duplicates = findPastSixMonthsDuplicates(newJobRecord, existingJobs);
       if (duplicates.length > 0) {
         return res.json({
@@ -118,6 +122,26 @@ extractRouter.post('/extract-job', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Failed to save job' });
+  }
+});
+
+// GET /api/company-facts?company=&url=&title=: look up employer facts for a job saved without them.
+// Read-only: the result is shown alongside the job but the stored snapshot is not changed.
+extractRouter.get('/company-facts', async (req, res) => {
+  const company = String(req.query.company || '').trim();
+  if (!company) {
+    return res.status(400).json({ success: false, error: 'company is required' });
+  }
+  try {
+    const facts = await resolveCompanyFacts({
+      company,
+      existingJobs: await jobRepository.listJobs(),
+      jobUrl: req.query.url ? String(req.query.url) : undefined,
+      jobTitle: req.query.title ? String(req.query.title) : undefined,
+    });
+    res.json({ success: true, facts });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Company lookup failed' });
   }
 });
 

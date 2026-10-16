@@ -20,7 +20,8 @@ import { JobRecord, JobStatus } from '../types';
 import { CompanyLogo } from './CompanyLogo';
 import { getStatusMeta, STATUS_ORDER } from '../lib/statusMeta';
 import { normalizeStatusHistory } from '../lib/statusHistory';
-import { companyFactsForDisplay, needsManualReview } from '../lib/formatHelpers';
+import { needsManualReview } from '../lib/formatHelpers';
+import { useCompanyFacts } from '../hooks/useCompanyFacts';
 
 interface JobDetailModalProps {
   job: JobRecord | null;
@@ -106,7 +107,8 @@ export const JobDetailModal = ({
     setIsSavingDate(false);
   };
 
-  const companyFacts = companyFactsForDisplay(job?.companyMetadata);
+  const { facts: companyFacts, source: companyFactsSource, isLookingUp: isLookingUpCompany, filledFromLookup } =
+    useCompanyFacts(job);
 
   return (
     <AnimatePresence>
@@ -354,6 +356,7 @@ export const JobDetailModal = ({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <Building2 className="w-4 h-4 text-indigo-500" />
                   <span>Company Intelligence</span>
+                  {isLookingUpCompany && <span className="text-[10px] font-normal normal-case tracking-normal text-slate-400">Looking up…</span>}
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
@@ -373,6 +376,12 @@ export const JobDetailModal = ({
                     <span className="font-semibold text-slate-800">{companyFacts.foundingYear}</span>
                   </div>
                 </div>
+                {companyFactsSource && (
+                  <p className="text-[10px] text-slate-400">
+                    {filledFromLookup ? 'Looked up just now from ' : 'Source: '}
+                    {companyFactsSource}
+                  </p>
+                )}
               </div>
 
               {/* Position Intelligence & Skills */}
