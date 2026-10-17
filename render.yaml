@@ -17,6 +17,10 @@ services:
       # Public anon/publishable key. Users sign in with Google via Supabase Auth; row-level security scopes their data.
       - key: SUPABASE_ANON_KEY
         sync: false
+      # Optional but recommended: the Google OAuth client ID also entered in Supabase's Google provider. With it,
+      # Google's account chooser names this app instead of the Supabase project.
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
       # Optional: jobs each user can add by link or pasted text per day (default 30; 0 turns the limit off).
       - key: EXTRACTION_DAILY_LIMIT
         sync: false
