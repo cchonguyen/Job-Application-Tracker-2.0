@@ -49,6 +49,9 @@ Capture a job posting with one click from its link (or from the page you are vie
 
 Every network step has a timeout (ATS APIs 4–6 s, scraper 10 s, Gemini 25 s, Gemini URL context 40 s), so an ingest always finishes. The ATS diagnostic tool (Settings › ATS Regex Diagnostic, `POST /api/test-ats-diagnostic`) shows each tier's result for a URL.
 
+### 4.2a Company facts (`server/services/company`)
+Headcount, headquarters, ownership and founding year come from real sources, field by field, in this order: **Wikidata** (free, no key; matched on the exact company name and only entities that look like a business), facts already saved on earlier jobs at the same company, the posting extraction, then a **Gemini call grounded in Google Search** for anything still missing (answers without search grounding are discarded). Results are cached for 12 hours per company. A field no source states stays `Unknown`, and the source is stored in `companyMetadata.source` and shown under Company Intelligence. Jobs saved without facts get the same lookup when their detail view opens; it fills the view only, and the stored snapshot is not changed.
+
 ### 4.3 Tracking
 - Statuses: **Saved, Applied, Interviewing, Offer, Accepted, Rejected, Declined**. Each change is appended to the job's status history with a timestamp; moving to Applied sets the applied date.
 - Spreadsheet view with search, filters, column sort (sorting turns off status grouping), compact and full layouts, and stacked cards on mobile.
@@ -76,6 +79,7 @@ Every network step has a timeout (ATS APIs 4–6 s, scraper 10 s, Gemini 25 s, G
 | `DELETE` | `/api/jobs/:id` | Delete a job |
 | `POST` | `/api/jobs/import` | Upsert imported jobs by id |
 | `POST` | `/api/jobs/reparse` | Re-normalize stored records |
+| `GET` | `/api/company-facts?company=&url=&title=` | Look up company facts for a job saved without them (read-only) |
 | `POST` | `/api/test-ats-diagnostic` | Run the pipeline on a URL and report every tier |
 
 ---
