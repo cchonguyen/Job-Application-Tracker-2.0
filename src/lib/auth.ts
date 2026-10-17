@@ -4,9 +4,20 @@ export interface AuthConfig {
   enabled: boolean;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
+  googleClientId?: string;
 }
 
+let configPromise: Promise<AuthConfig> | null = null;
 let clientPromise: Promise<SupabaseClient | null> | null = null;
+
+/** Sign-in settings from the server, fetched once per page load. */
+export function getAuthConfig(): Promise<AuthConfig> {
+  configPromise ??= loadAuthConfig().catch((err) => {
+    configPromise = null;
+    throw err;
+  });
+  return configPromise;
+}
 
 async function loadAuthConfig(): Promise<AuthConfig> {
   const res = await fetch('/api/auth/config');
@@ -22,7 +33,7 @@ async function loadAuthConfig(): Promise<AuthConfig> {
  * keeps (with a refresh token) persists in this browser, so the bookmarklet's capture popup is signed in too.
  */
 export function getAuthClient(): Promise<SupabaseClient | null> {
-  clientPromise ??= loadAuthConfig()
+  clientPromise ??= getAuthConfig()
     .then((config) => {
       if (!config.enabled || !config.supabaseUrl || !config.supabaseAnonKey) return null;
       return createClient(config.supabaseUrl, config.supabaseAnonKey, {
@@ -42,6 +53,23 @@ export async function currentAccessToken(): Promise<string | null> {
   if (!client) return null;
   const { data } = await client.auth.getSession();
   return data.session?.access_token ?? null;
+}
+
+/** A one-time nonce: the raw value goes to Supabase, its SHA-256 hex digest to Google, so a token can't be replayed. */
+export async function createSignInNonce(): Promise<{ raw: string; hashed: string }> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const raw = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, '');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+  const hashed = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  return { raw, hashed };
+}
+
+/** Exchanges the ID token from Google's sign-in popup for a Supabase session. */
+export async function signInWithGoogleIdToken(idToken: string, rawNonce: string): Promise<void> {
+  const client = await getAuthClient();
+  if (!client) return;
+  const { error } = await client.auth.signInWithIdToken({ provider: 'google', token: idToken, nonce: rawNonce });
+  if (error) throw error;
 }
 
 /** Sends the browser to Google, which returns it to the tracker's home page signed in. */

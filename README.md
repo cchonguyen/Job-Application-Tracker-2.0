@@ -41,6 +41,7 @@ Use this on Render Free so jobs survive redeploys and each user signs in with Go
    - In Supabase **Authentication → Sign In / Providers → Google**, enable it and paste the client ID and secret.
    - In Supabase **Authentication → URL Configuration**, set **Site URL** to your app URL (e.g. `https://your-app.onrender.com`) and add it, plus `http://localhost:3000` for local testing, to **Redirect URLs**.
 5. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to `.env` locally and to Render **Environment**.
+6. Optional but recommended: set `GOOGLE_OAUTH_CLIENT_ID` to the same Google client ID. Sign-in then runs in Google's popup on your site, so Google's account chooser names your app's address instead of `YOUR_REF.supabase.co`. Your app URL must be in the client's **Authorized JavaScript origins**.
 
 On startup the server logs `Persistence: Supabase with Google sign-in (…)` when configured.
 
@@ -74,6 +75,7 @@ Environment variables:
 - `GEMINI_API_KEY` = your Google AI Studio key
 - `SUPABASE_URL` = your Supabase project URL
 - `SUPABASE_ANON_KEY` = Supabase **anon / publishable** key. Required in production: the API returns 503 without Supabase.
+- `GOOGLE_OAUTH_CLIENT_ID` = optional; the Google client ID from Supabase's Google provider, so sign-in shows your app's name
 - `EXTRACTION_DAILY_LIMIT` = optional per-user daily extraction limit (default 30)
 
 Then **Manual Deploy**. Confirm logs show `Persistence: Supabase with Google sign-in`.

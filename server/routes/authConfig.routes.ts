@@ -20,6 +20,9 @@ authConfigRouter.get('/config', (_req, res) => {
       enabled: true,
       supabaseUrl: normalizeSupabaseUrl(process.env.SUPABASE_URL || ''),
       supabaseAnonKey: anonKey,
+      // With a client ID the browser signs in through Google's own popup on this site, so Google's account chooser
+      // names this app's address rather than the Supabase project's. Without one it falls back to Supabase's redirect.
+      googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || undefined,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

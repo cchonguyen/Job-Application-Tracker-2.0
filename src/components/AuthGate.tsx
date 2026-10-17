@@ -1,7 +1,15 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AlertTriangle, Briefcase, Loader2 } from 'lucide-react';
-import { getAuthClient, signInWithGoogle, signOut } from '../lib/auth';
+import {
+  createSignInNonce,
+  getAuthClient,
+  getAuthConfig,
+  signInWithGoogle,
+  signInWithGoogleIdToken,
+  signOut,
+} from '../lib/auth';
+import { loadGsi } from '../lib/googleAuth';
 import { AUTH_REQUIRED_EVENT } from '../lib/apiClient';
 import { clearSheetsConnection } from '../hooks/useGoogleSheetsSync';
 
@@ -151,20 +159,82 @@ const SignInScreen = ({ state, capture }: { state: GateState; capture: boolean }
         {state.kind === 'signedOut' && !capture && (
           <>
             <p className="text-slate-600">Sign in to see and track your applications. Your jobs are visible only to you.</p>
-            <button
-              type="button"
-              onClick={startGoogle}
-              disabled={isRedirecting}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 font-medium hover:bg-slate-50 disabled:opacity-60"
-            >
-              {isRedirecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleMark />}
-              <span>Continue with Google</span>
-            </button>
+            <GoogleIdentityButton
+              onError={setError}
+              fallback={
+                <button
+                  type="button"
+                  onClick={startGoogle}
+                  disabled={isRedirecting}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 font-medium hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {isRedirecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleMark />}
+                  <span>Continue with Google</span>
+                </button>
+              }
+            />
             {error && <p className="text-rose-600 text-xs">{error}</p>}
           </>
         )}
       </div>
     </div>
+  );
+};
+
+/**
+ * Google's own sign-in button. Signing in happens in a Google popup on this site and the ID token goes straight to
+ * Supabase, so Google's account chooser names this app instead of the Supabase project. Falls back to the redirect
+ * button when the server has no Google client ID or Google's script can't load.
+ */
+const GoogleIdentityButton = ({ fallback, onError }: { fallback: ReactNode; onError: (message: string) => void }) => {
+  const slot = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<'loading' | 'google' | 'fallback'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const config = await getAuthConfig().catch(() => null);
+      const clientId = config?.googleClientId;
+      if (!clientId || !(await loadGsi()) || !window.google?.accounts?.id || cancelled) {
+        if (!cancelled) setMode('fallback');
+        return;
+      }
+      const nonce = await createSignInNonce();
+      if (cancelled || !slot.current) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        nonce: nonce.hashed,
+        callback: async ({ credential }: { credential?: string }) => {
+          if (!credential) return;
+          try {
+            await signInWithGoogleIdToken(credential, nonce.raw);
+          } catch (err: any) {
+            onError(err.message || 'Google sign-in failed.');
+          }
+        },
+      });
+      window.google.accounts.id.renderButton(slot.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
+        logo_alignment: 'center',
+        width: Math.min(400, slot.current.offsetWidth || 320),
+      });
+      setMode('google');
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <div ref={slot} className={mode === 'google' ? 'flex justify-center min-h-10' : 'w-full'} hidden={mode === 'fallback'} />
+      {mode === 'fallback' && fallback}
+    </>
   );
 };
 

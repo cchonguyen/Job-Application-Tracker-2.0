@@ -127,6 +127,7 @@ interface JobRecord {
 |---|---|---|
 | `GEMINI_API_KEY` | Recommended | Gemini extraction (Tiers 3–4 and pasted text) |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
+| `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` |
 
