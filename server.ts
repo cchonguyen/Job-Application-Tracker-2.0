@@ -19,10 +19,10 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
 
   let persistenceLabel =
-    'Persistence: local spreadsheet_data.json (set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to use Supabase)';
+    'Persistence: local spreadsheet_data.json, single local user (set SUPABASE_URL + SUPABASE_ANON_KEY to use Supabase sign-in)';
   if (isUsingSupabase()) {
     try {
-      persistenceLabel = `Persistence: Supabase (${normalizeSupabaseUrl(process.env.SUPABASE_URL || '')})`;
+      persistenceLabel = `Persistence: Supabase with Google sign-in (${normalizeSupabaseUrl(process.env.SUPABASE_URL || '')})`;
     } catch (e: any) {
       persistenceLabel = `Persistence: Supabase misconfigured (${e.message})`;
     }

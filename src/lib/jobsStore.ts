@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -30,7 +31,23 @@ type JobRow = {
   salary_min?: number | null;
   salary_max?: number | null;
   date_added?: string | null;
+  user_id?: string;
 };
+
+/**
+ * Whose jobs a store call reads or writes. Every Supabase query runs through `db`, a client signed in as that user,
+ * so Postgres row-level security enforces ownership even if a query here forgot its user filter.
+ */
+export interface JobScope {
+  userId: string;
+  /** Supabase client carrying the user's access token; null in local JSON mode. */
+  db: SupabaseClient | null;
+}
+
+/** Owner of local JSON records written before accounts existed, and of everything in local development. */
+export const LOCAL_DEV_USER_ID = 'local-dev-user';
+
+type StoredJsonJob = JobRecord & { userId?: string };
 
 const INITIAL_SEED_JOBS: JobRecord[] = [
   {
@@ -79,13 +96,11 @@ const INITIAL_SEED_JOBS: JobRecord[] = [
   },
 ];
 
-let supabaseClient: SupabaseClient | null | undefined;
-
 /** Matches Supabase's default max rows per request. */
 const LIST_PAGE_SIZE = 1000;
 
 export function isUsingSupabase(): boolean {
-  return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  return Boolean(process.env.SUPABASE_URL?.trim());
 }
 
 /**
@@ -134,28 +149,29 @@ export function normalizeSupabaseUrl(raw: string): string {
   return parsed.origin;
 }
 
-function getSupabase(): SupabaseClient {
-  if (supabaseClient === undefined) {
-    const rawUrl = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-    if (!rawUrl?.trim() || !key) {
-      supabaseClient = null;
-    } else {
-      const url = normalizeSupabaseUrl(rawUrl);
-      if (key.startsWith('sb_publishable_') || key.toLowerCase().includes('anon')) {
-        console.warn(
-          'SUPABASE_SERVICE_ROLE_KEY looks like a publishable/anon key. Use the legacy service_role secret instead.'
-        );
-      }
-      supabaseClient = createClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-    }
+/** Supabase client signed in as the user. Stores the user's own access token, never the service-role key. */
+export function createUserSupabaseClient(accessToken: string): SupabaseClient {
+  const url = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
+  const anonKey = process.env.SUPABASE_ANON_KEY?.trim();
+  if (!anonKey) {
+    throw new Error('Supabase is not configured. Set SUPABASE_ANON_KEY (Project Settings → API → anon/publishable key).');
   }
-  if (!supabaseClient) {
-    throw new Error('Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+}
+
+function db(scope: JobScope): SupabaseClient {
+  if (!scope.db) {
+    throw new Error('Supabase request is missing the signed-in user.');
   }
-  return supabaseClient;
+  return scope.db;
+}
+
+/** A fresh, unguessable job id. Ids are global primary keys, so they must never collide across users. */
+export function newJobId(): string {
+  return `job_${crypto.randomUUID()}`;
 }
 
 function isMissingColumnError(error: any, columnName: string): boolean {
@@ -404,12 +420,12 @@ function jobToRow(norm: JobRecord): JobRow {
   };
 }
 
-function readJsonJobs(): JobRecord[] {
+function readJsonJobs(): StoredJsonJob[] {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((job) => hydrateStoredJob(job as JobRecord));
+        return parsed.map((job) => ({ ...hydrateStoredJob(job as JobRecord), userId: (job as StoredJsonJob).userId }));
       }
     }
   } catch (err) {
@@ -433,7 +449,7 @@ function readJsonJobs(): JobRecord[] {
   return [...INITIAL_SEED_JOBS];
 }
 
-function writeJsonJobs(jobs: JobRecord[]) {
+function writeJsonJobs(jobs: StoredJsonJob[]) {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(jobs, null, 2), 'utf-8');
   } catch (err) {
@@ -441,18 +457,35 @@ function writeJsonJobs(jobs: JobRecord[]) {
   }
 }
 
-export async function listJobs(): Promise<JobRecord[]> {
+function ownsJsonJob(job: StoredJsonJob, scope: JobScope): boolean {
+  return (job.userId || LOCAL_DEV_USER_ID) === scope.userId;
+}
+
+function withoutOwner(job: StoredJsonJob): JobRecord {
+  const { userId: _owner, ...rest } = job;
+  return rest;
+}
+
+function readOwnJsonJobs(scope: JobScope): JobRecord[] {
+  return readJsonJobs()
+    .filter((job) => ownsJsonJob(job, scope))
+    .map(withoutOwner);
+}
+
+
+export async function listJobs(scope: JobScope): Promise<JobRecord[]> {
   if (!isUsingSupabase()) {
-    return readJsonJobs();
+    return readOwnJsonJobs(scope);
   }
 
   // Supabase caps a single select at 1,000 rows by default, and every ingest adds a snapshot row, so read in pages
   // until a short page comes back. Ordering by id as well keeps pages stable when created_at values tie.
   const rows: JobRow[] = [];
   for (let from = 0; ; from += LIST_PAGE_SIZE) {
-    const { data, error } = await getSupabase()
+    const { data, error } = await db(scope)
       .from('jobs')
       .select('*')
+      .eq('user_id', scope.userId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: true })
       .range(from, from + LIST_PAGE_SIZE - 1);
@@ -468,24 +501,24 @@ export async function listJobs(): Promise<JobRecord[]> {
   return rows.map((row) => rowToJob(row));
 }
 
-export async function insertJob(job: JobRecord): Promise<JobRecord> {
+export async function insertJob(scope: JobScope, job: JobRecord): Promise<JobRecord> {
   const captured = normalizeJobRecord(job);
 
   if (!isUsingSupabase()) {
     const jobs = readJsonJobs();
-    jobs.unshift(captured);
+    jobs.unshift({ ...captured, userId: scope.userId });
     writeJsonJobs(jobs);
     return captured;
   }
 
-  const row = jobToRow(captured);
-  let { data, error } = await getSupabase().from('jobs').insert(row).select('*').single();
+  const row = { ...jobToRow(captured), user_id: scope.userId };
+  let { data, error } = await db(scope).from('jobs').insert(row).select('*').single();
 
   if (error && isMissingColumnError(error, 'team')) {
     console.warn("Supabase 'team' column missing on jobs table. Fallback storing team in position_metadata.");
     const fallbackRow = { ...row };
     delete (fallbackRow as any).team;
-    const retry = await getSupabase().from('jobs').insert(fallbackRow).select('*').single();
+    const retry = await db(scope).from('jobs').insert(fallbackRow).select('*').single();
     data = retry.data;
     error = retry.error;
   }
@@ -497,29 +530,33 @@ export async function insertJob(job: JobRecord): Promise<JobRecord> {
   return rowToJob(data as JobRow);
 }
 
-export async function updateJob(id: string, updates: Partial<JobRecord>): Promise<JobRecord | null> {
+export async function updateJob(scope: JobScope, id: string, updates: Partial<JobRecord>): Promise<JobRecord | null> {
+  // The id names the row; an edit never moves a job to another id.
+  const { id: _ignoredId, ...edits } = updates;
+
   if (!isUsingSupabase()) {
     const jobs = readJsonJobs();
-    const index = jobs.findIndex((j) => j.id === id);
+    const index = jobs.findIndex((j) => j.id === id && ownsJsonJob(j, scope));
     if (index === -1) return null;
 
-    const merged = mergeJobUpdate(jobs[index], updates);
+    const merged = mergeJobUpdate(withoutOwner(jobs[index]), edits);
 
-    jobs[index] = merged;
+    jobs[index] = { ...merged, userId: jobs[index].userId };
     writeJsonJobs(jobs);
     return merged;
   }
 
-  const existing = await getJobById(id);
+  const existing = await getJobById(scope, id);
   if (!existing) return null;
 
-  const merged = mergeJobUpdate(existing, updates);
+  const merged = mergeJobUpdate(existing, edits);
 
-  const row = jobToRow(merged);
-  let { data, error } = await getSupabase()
+  const row = { ...jobToRow(merged), user_id: scope.userId };
+  let { data, error } = await db(scope)
     .from('jobs')
     .update(row)
     .eq('id', id)
+    .eq('user_id', scope.userId)
     .select('*')
     .single();
 
@@ -527,10 +564,11 @@ export async function updateJob(id: string, updates: Partial<JobRecord>): Promis
     console.warn("Supabase 'team' column missing on jobs table. Fallback storing team in position_metadata.");
     const fallbackRow = { ...row };
     delete (fallbackRow as any).team;
-    const retry = await getSupabase()
+    const retry = await db(scope)
       .from('jobs')
       .update(fallbackRow)
       .eq('id', id)
+      .eq('user_id', scope.userId)
       .select('*')
       .single();
     data = retry.data;
@@ -544,12 +582,17 @@ export async function updateJob(id: string, updates: Partial<JobRecord>): Promis
   return rowToJob(data as JobRow);
 }
 
-export async function getJobById(id: string): Promise<JobRecord | null> {
+export async function getJobById(scope: JobScope, id: string): Promise<JobRecord | null> {
   if (!isUsingSupabase()) {
-    return readJsonJobs().find((j) => j.id === id) || null;
+    return readOwnJsonJobs(scope).find((j) => j.id === id) || null;
   }
 
-  const { data, error } = await getSupabase().from('jobs').select('*').eq('id', id).maybeSingle();
+  const { data, error } = await db(scope)
+    .from('jobs')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', scope.userId)
+    .maybeSingle();
 
   if (error) {
     throw new Error(supabaseErrorMessage('getJobById', error));
@@ -558,16 +601,21 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
   return data ? rowToJob(data as JobRow) : null;
 }
 
-export async function deleteJob(id: string): Promise<boolean> {
+export async function deleteJob(scope: JobScope, id: string): Promise<boolean> {
   if (!isUsingSupabase()) {
     const jobs = readJsonJobs();
-    const next = jobs.filter((j) => j.id !== id);
+    const next = jobs.filter((j) => !(j.id === id && ownsJsonJob(j, scope)));
     if (next.length === jobs.length) return false;
     writeJsonJobs(next);
     return true;
   }
 
-  const { data, error } = await getSupabase().from('jobs').delete().eq('id', id).select('id');
+  const { data, error } = await db(scope)
+    .from('jobs')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', scope.userId)
+    .select('id');
 
   if (error) {
     throw new Error(supabaseErrorMessage('deleteJob', error));
@@ -582,46 +630,45 @@ export interface UpsertJobsResult {
   jobs: JobRecord[];
 }
 
-/** Insert new jobs or replace existing ones that share the same id. */
-export async function upsertJobs(incoming: JobRecord[]): Promise<UpsertJobsResult> {
+/**
+ * Insert new jobs or replace the caller's existing ones that share the same id. Ids are global, so an incoming id the
+ * caller doesn't own (another user's, or one from someone else's export) gets a fresh id and becomes a new row.
+ */
+export async function upsertJobs(scope: JobScope, incoming: JobRecord[]): Promise<UpsertJobsResult> {
+  const own = await listJobs(scope);
   if (incoming.length === 0) {
-    return { inserted: 0, updated: 0, jobs: await listJobs() };
+    return { inserted: 0, updated: 0, jobs: own };
   }
+
+  const ownIds = new Set(own.map((j) => j.id));
+  let inserted = 0;
+  let updated = 0;
+  const keyed = incoming.map((job) => {
+    if (job.id && ownIds.has(job.id)) {
+      updated++;
+      return job;
+    }
+    inserted++;
+    return { ...job, id: newJobId() };
+  });
 
   if (!isUsingSupabase()) {
     const jobs = readJsonJobs();
-    const byId = new Map(jobs.map((j) => [j.id, j]));
-    let inserted = 0;
-    let updated = 0;
-
-    for (const job of incoming) {
-      if (byId.has(job.id)) {
-        updated++;
-      } else {
-        inserted++;
-      }
+    const others = jobs.filter((j) => !ownsJsonJob(j, scope));
+    const byId = new Map(jobs.filter((j) => ownsJsonJob(j, scope)).map((j) => [j.id, withoutOwner(j)]));
+    for (const job of keyed) {
       byId.set(job.id, normalizeJobRecord(job));
     }
 
     const next = Array.from(byId.values()).sort((a, b) =>
       String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
     );
-    writeJsonJobs(next);
+    writeJsonJobs([...next.map((job) => ({ ...job, userId: scope.userId })), ...others]);
     return { inserted, updated, jobs: next };
   }
 
-  const existing = await listJobs();
-  const existingIds = new Set(existing.map((j) => j.id));
-  let inserted = 0;
-  let updated = 0;
-
-  for (const job of incoming) {
-    if (existingIds.has(job.id)) updated++;
-    else inserted++;
-  }
-
-  const rows = incoming.map((job) => jobToRow(normalizeJobRecord(job)));
-  let { error } = await getSupabase().from('jobs').upsert(rows, { onConflict: 'id' });
+  const rows = keyed.map((job) => ({ ...jobToRow(normalizeJobRecord(job)), user_id: scope.userId }));
+  let { error } = await db(scope).from('jobs').upsert(rows, { onConflict: 'id' });
 
   if (error && isMissingColumnError(error, 'team')) {
     console.warn("Supabase 'team' column missing on jobs table. Fallback storing team in position_metadata.");
@@ -630,7 +677,7 @@ export async function upsertJobs(incoming: JobRecord[]): Promise<UpsertJobsResul
       delete (copy as any).team;
       return copy;
     });
-    const retry = await getSupabase().from('jobs').upsert(fallbackRows, { onConflict: 'id' });
+    const retry = await db(scope).from('jobs').upsert(fallbackRows, { onConflict: 'id' });
     error = retry.error;
   }
 
@@ -638,12 +685,12 @@ export async function upsertJobs(incoming: JobRecord[]): Promise<UpsertJobsResul
     throw new Error(supabaseErrorMessage('upsertJobs', error));
   }
 
-  const jobs = await listJobs();
+  const jobs = await listJobs(scope);
   return { inserted, updated, jobs };
 }
 
-export async function reparseAllJobsInStore(): Promise<{ total: number; updated: number }> {
-  const allJobs = await listJobs();
+export async function reparseAllJobsInStore(scope: JobScope): Promise<{ total: number; updated: number }> {
+  const allJobs = await listJobs(scope);
   let updatedCount = 0;
 
   for (const job of allJobs) {
@@ -655,7 +702,7 @@ export async function reparseAllJobsInStore(): Promise<{ total: number; updated:
         jobTitle: parsedTitle,
         team: parsedTeam || job.team,
       };
-      await updateJob(job.id, updatedJob);
+      await updateJob(scope, job.id, updatedJob);
     }
   }
 

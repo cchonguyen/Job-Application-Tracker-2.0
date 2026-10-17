@@ -19,6 +19,16 @@ import {
 const STORAGE_KEY_SHEET = 'job_tracker_connected_sheet';
 const STORAGE_KEY_AUTO_SYNC = 'job_tracker_auto_sync';
 
+/** Forgets this browser's linked sheet, e.g. when the tracker account signs out. */
+export function clearSheetsConnection(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_SHEET);
+    localStorage.removeItem(STORAGE_KEY_AUTO_SYNC);
+  } catch {
+    // Storage unavailable; nothing was persisted.
+  }
+}
+
 export interface ConnectedSheet {
   id: string;
   name: string;

@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { parsingEngine } from '../services/parsing/index.ts';
 import { parseUrlDeterministically } from '../services/parsing/utils/htmlCleaner.ts';
-import { jobRepository } from '../services/storage/index.ts';
+import { jobRepository, newJobId } from '../services/storage/index.ts';
+import { scopeOf } from '../middleware/requireUser.ts';
+import { companyLookupLimit, extractionLimit } from '../middleware/extractionLimit.ts';
 import { detectAts } from '../../src/lib/atsDetect.ts';
 import { initialDateAppliedForStatus } from '../../src/lib/jobDates.ts';
 import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
@@ -12,13 +14,15 @@ import { resolveCompanyFacts } from '../services/company/companyFacts.ts';
 export const extractRouter = Router();
 
 // POST /api/extract-job: Ingest URL or manual text, run pipeline, and append to spreadsheet
-extractRouter.post('/extract-job', async (req, res) => {
+extractRouter.post('/extract-job', extractionLimit, async (req, res) => {
   const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = req.body;
+  const scope = scopeOf(req);
 
   // Direct fast save of pre-extracted candidate when user confirmed duplicate warning
   if (candidateJob && confirmDuplicate) {
     try {
-      const saved = await jobRepository.createJob(candidateJob);
+      // The candidate round-trips through the browser, so the server picks its id.
+      const saved = await jobRepository.createJob(scope, { ...candidateJob, id: newJobId() });
       return res.json({
         success: true,
         job: saved,
@@ -55,7 +59,8 @@ extractRouter.post('/extract-job', async (req, res) => {
 
   try {
     const nowIso = new Date().toISOString();
-    const existingJobs = await jobRepository.listJobs();
+    // Only the caller's own jobs: they feed both the duplicate check and company-fact reuse.
+    const existingJobs = await jobRepository.listJobs(scope);
     const company = extractedData.company || 'Unknown Company';
     const companyMetadata = await resolveCompanyFacts({
       company,
@@ -70,7 +75,7 @@ extractRouter.post('/extract-job', async (req, res) => {
     );
 
     const newJobRecord = {
-      id: `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: newJobId(),
       company,
       jobTitle: parsedRoleTeam.jobTitle || 'Unknown Role',
       team: parsedRoleTeam.team || extractedData.team || undefined,
@@ -112,7 +117,7 @@ extractRouter.post('/extract-job', async (req, res) => {
       }
     }
 
-    const saved = await jobRepository.createJob(newJobRecord);
+    const saved = await jobRepository.createJob(scope, newJobRecord);
 
     res.json({
       success: true,
@@ -127,7 +132,7 @@ extractRouter.post('/extract-job', async (req, res) => {
 
 // GET /api/company-facts?company=&url=&title=: look up employer facts for a job saved without them.
 // Read-only: the result is shown alongside the job but the stored snapshot is not changed.
-extractRouter.get('/company-facts', async (req, res) => {
+extractRouter.get('/company-facts', companyLookupLimit, async (req, res) => {
   const company = String(req.query.company || '').trim();
   if (!company) {
     return res.status(400).json({ success: false, error: 'company is required' });
@@ -135,7 +140,7 @@ extractRouter.get('/company-facts', async (req, res) => {
   try {
     const facts = await resolveCompanyFacts({
       company,
-      existingJobs: await jobRepository.listJobs(),
+      existingJobs: await jobRepository.listJobs(scopeOf(req)),
       jobUrl: req.query.url ? String(req.query.url) : undefined,
       jobTitle: req.query.title ? String(req.query.title) : undefined,
     });
@@ -146,7 +151,7 @@ extractRouter.get('/company-facts', async (req, res) => {
 });
 
 // POST /api/test-ats-diagnostic: Run ATS diagnostic on a test URL without saving
-extractRouter.post('/test-ats-diagnostic', async (req, res) => {
+extractRouter.post('/test-ats-diagnostic', extractionLimit, async (req, res) => {
   const { url } = req.body;
   if (!url) {
     return res.status(400).json({ success: false, error: 'URL is required' });

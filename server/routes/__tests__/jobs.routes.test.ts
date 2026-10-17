@@ -36,14 +36,24 @@ beforeAll(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jobs-routes-'));
   dataFile = path.join(tmpDir, 'spreadsheet_data.json');
   delete process.env.SUPABASE_URL;
-  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   // The JSON store resolves its data file from cwd at import time.
   process.chdir(tmpDir);
 
   const { jobsRouter } = await import('../jobs.routes.ts');
+  const { extractRouter } = await import('../extract.routes.ts');
+  const { LOCAL_DEV_USER_ID } = await import('../../../src/lib/jobsStore.ts');
   const app = express();
   app.use(express.json());
+  // Stands in for requireUser: each request acts as the user named in x-test-user (default: the local user,
+  // who owns records saved before accounts existed).
+  app.use((req, _res, next) => {
+    const id = req.get('x-test-user') || LOCAL_DEV_USER_ID;
+    req.user = { id, email: null };
+    req.jobScope = { userId: id, db: null };
+    next();
+  });
   app.use('/api/jobs', jobsRouter);
+  app.use('/api', extractRouter);
   server = await new Promise<http.Server>((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
@@ -130,5 +140,79 @@ describe('POST /api/jobs/reparse', () => {
     const saved = JSON.parse(fs.readFileSync(dataFile, 'utf-8'))[0];
     expect(saved.jobTitle).toBe('Senior Software Engineer');
     expect(saved.team).toBe('Platform');
+  });
+});
+
+describe('isolation between users', () => {
+  const asOther = { 'Content-Type': 'application/json', 'x-test-user': 'user-b' };
+  const readStored = () => JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
+
+  it("never lists another user's jobs", async () => {
+    const body = await (await fetch(`${baseUrl}/api/jobs`, { headers: asOther })).json();
+    expect(body.success).toBe(true);
+    expect(body.jobs).toEqual([]);
+  });
+
+  it("can't edit or delete another user's job", async () => {
+    const before = fs.readFileSync(dataFile, 'utf-8');
+
+    const patch = await fetch(`${baseUrl}/api/jobs/${storedJob.id}`, {
+      method: 'PATCH',
+      headers: asOther,
+      body: JSON.stringify({ status: 'Rejected', notes: 'not mine' }),
+    });
+    const del = await fetch(`${baseUrl}/api/jobs/${storedJob.id}`, { method: 'DELETE', headers: asOther });
+
+    expect(patch.status).toBe(404);
+    expect(del.status).toBe(404);
+    expect(fs.readFileSync(dataFile, 'utf-8')).toBe(before);
+  });
+
+  it("imports another user's id as a new job instead of overwriting theirs", async () => {
+    const res = await fetch(`${baseUrl}/api/jobs/import`, {
+      method: 'POST',
+      headers: asOther,
+      body: JSON.stringify({ jobs: [{ ...storedJob, jobTitle: 'Hijacked title' }] }),
+    });
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.inserted).toBe(1);
+    expect(body.updated).toBe(0);
+    expect(body.jobs).toHaveLength(1);
+    expect(body.jobs[0].id).not.toBe(storedJob.id);
+
+    const original = readStored().find((j: any) => j.id === storedJob.id);
+    expect(original.jobTitle).toBe(storedJob.jobTitle);
+    expect(original.userId).toBeUndefined();
+  });
+
+  it('still updates in place when users re-import their own export', async () => {
+    const res = await fetch(`${baseUrl}/api/jobs/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobs: [{ ...storedJob, notes: 'Re-imported' }] }),
+    });
+    const body = await res.json();
+
+    expect(body.updated).toBe(1);
+    expect(body.inserted).toBe(0);
+    expect(readStored()).toHaveLength(1);
+    expect(readStored()[0].notes).toBe('Re-imported');
+  });
+
+  it('saves a confirmed duplicate under a fresh id owned by the caller', async () => {
+    const res = await fetch(`${baseUrl}/api/extract-job`, {
+      method: 'POST',
+      headers: asOther,
+      body: JSON.stringify({ confirmDuplicate: true, candidateJob: { ...storedJob, userId: 'local-dev-user' } }),
+    });
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.job.id).not.toBe(storedJob.id);
+    const saved = readStored().find((j: any) => j.id === body.job.id);
+    expect(saved.userId).toBe('user-b');
+    expect(readStored().find((j: any) => j.id === storedJob.id).userId).toBeUndefined();
   });
 });

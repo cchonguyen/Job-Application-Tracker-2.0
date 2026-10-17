@@ -27,7 +27,8 @@ Capture a job posting with one click from its link (or from the page you are vie
 | UI | React 19, Vite, Tailwind CSS 4, `motion`, `lucide-react` |
 | Server | Express on Node, TypeScript via `tsx` in dev, bundled by `esbuild` to `dist/server.cjs` |
 | Extraction | Cheerio scraper, dedicated ATS APIs, Google Gemini (`@google/genai`, `gemini-3.8-flash`) |
-| Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
+| Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
+| Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
 | Hosting | Render web service (`render.yaml`), built with Bun |
 | Optional | Google Sheets sync from the browser (Google sign-in with Drive/Sheets scopes) |
 
@@ -59,9 +60,12 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Analytics bar: pipeline counts, callback rate and salary ranges.
 - Import and export as JSON or CSV; optional Google Sheets sync.
 
-### 4.4 Access
-- The server requires `API_ACCESS_KEY` on every `/api` request (`Authorization: Bearer <key>` or `X-Api-Key`). The UI asks for it once on a 401 and keeps it in the browser's local storage.
-- With no key configured the API stays open in development and returns 503 in production.
+### 4.4 Accounts and access
+- Anyone can sign up with Google. Each account sees, edits, imports and gets duplicate warnings against only its own jobs.
+- Every `/api` request (except `GET /api/auth/config`) carries the user's Supabase access token as `Authorization: Bearer <token>`. The server verifies it and queries Postgres as that user, so row-level security enforces ownership.
+- Imported jobs whose ids belong to someone else get a fresh id and become new rows; the server picks every new job's id.
+- Each user can run `EXTRACTION_DAILY_LIMIT` extractions per UTC day (default 30). Job links are fetched only when they resolve to public addresses.
+- Without Supabase the API runs as a single local user in development and returns 503 in production.
 
 ### 4.5 Versioning
 - Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit show at the bottom of the Settings menu.
@@ -121,9 +125,9 @@ interface JobRecord {
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `API_ACCESS_KEY` | Production | Key every `/api` call must present |
 | `GEMINI_API_KEY` | Recommended | Gemini extraction (Tiers 3–4 and pasted text) |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Production | Persistent Postgres storage; server-side only |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
+| `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` |
 
 See `README.md` for local setup and deployment steps.

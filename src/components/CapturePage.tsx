@@ -3,7 +3,6 @@ import { CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { apiFetch } from '../lib/apiClient';
 import { CapturePayload, isValidCaptureToken, parseCaptureHash } from '../lib/captureBookmarklet';
 import { JobRecord } from '../types';
-import { AccessKeyModal } from './AccessKeyModal';
 
 type CaptureState =
   | { kind: 'saving' }
@@ -144,7 +143,6 @@ export const CapturePage = () => {
           </div>
         )}
       </div>
-      <AccessKeyModal onSaved={ingest} />
     </div>
   );
 };
