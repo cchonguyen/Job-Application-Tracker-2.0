@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD)
 ## Job Application Tracker
 
-What the app does today, how it is built, and the product rules any change must keep. Keep this file in step with the code: a PR that changes behavior described here updates it in the same PR.
+What the app does today, how it is built, and the product rules any change must keep. This file is the source of truth for behavior: a PR that changes anything described here updates it in the same PR (see "Documentation" in `AGENTS.md`; the **Docs updated** check enforces it).
 
 ---
 
@@ -15,8 +15,8 @@ Capture a job posting with one click from its link (or from the page you are vie
 
 - **Every ingest is an immutable snapshot.** A saved job keeps the JD details as captured. Re-ingesting a reposted or similar job adds a new row; it never overwrites or updates an existing one. Only user-owned fields change after capture: status, date applied, notes and manual edits.
 - **Never invent posting details.** When no model actually read the posting, fields that could not be read are stored as `Unknown` / `Not listed`, not as plausible defaults or benchmark salaries. Such jobs show a **Needs review** badge. Jobs saved before v0.3.0 may carry the old hard-coded company placeholder (1,000+ employees, United States, Private); the UI shows that exact trio as Unknown.
-- **Duplicates are flagged, not blocked.** If a company or role matches an application from the past six months, the user sees a comparison and chooses to save anyway or skip.
-- **The API is private.** Every `/api` call presents the server's access key.
+- **Duplicates are flagged, not blocked.** A new job is flagged when it has the same posting URL as, or is at the same company as, one of the user's applications from the past six months (any role there counts; same-role matches rank first). The same title at a different company is never flagged. The user sees a comparison and chooses to save anyway or skip.
+- **Each account sees only its own jobs.** Every `/api` call (except `GET /api/auth/config`) carries the signed-in user's token, and Postgres row-level security enforces ownership (4.4).
 
 ---
 
@@ -30,7 +30,7 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
 | Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
 | Hosting | Render web service (`render.yaml`), built with Bun |
-| Optional | Google Sheets sync from the browser (Google sign-in with Drive/Sheets scopes) |
+| Optional | Google Sheets sync from the browser (4.6), via a separate Google client in `firebase-applet-config.json` |
 
 ---
 
@@ -58,7 +58,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Spreadsheet view with search, filters, column sort (sorting turns off status grouping), compact and full layouts, and stacked cards on mobile.
 - Job detail drawer: summary, metadata, status timeline, notes, applied date, edit and delete.
 - Analytics bar: pipeline counts, callback rate and salary ranges.
-- Import and export as JSON or CSV; optional Google Sheets sync.
+- Import and export as JSON or CSV; optional Google Sheets sync (4.6).
 
 ### 4.4 Accounts and access
 - Anyone can sign up with Google. Each account sees, edits, imports and gets duplicate warnings against only its own jobs.
@@ -67,9 +67,16 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Each user can run `EXTRACTION_DAILY_LIMIT` extractions per UTC day (default 30). Job links are fetched only when they resolve to public addresses.
 - Without Supabase the API runs as a single local user in development and returns 503 in production.
 
-### 4.5 Versioning
-- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit show at the bottom of the Settings menu.
+### 4.5 Versioning and checks
+- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`RENDER_GIT_COMMIT` on Render, else local git) show at the bottom of the Settings menu.
 - The **CI** check type-checks, tests and builds every PR.
+- The **Docs updated** check fails a PR that changes app files without changing a doc, and a `schema.sql` change without a `docs/MIGRATIONS.md` entry (`AGENTS.md`).
+
+### 4.6 Google Sheets sync (`src/lib/googleSheets.ts`, `src/hooks/useGoogleSheetsSync.ts`)
+- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access to a Google OAuth client whose ID is `oAuthClientId` in `firebase-applet-config.json` (Google Identity Services popup, with Firebase Auth's popup as the fallback). The access token is kept in memory only.
+- The user picks an existing spreadsheet or creates one. Sync writes a header plus one row per job to the first tab from `A1`, and clears leftover rows below, so the tab mirrors the tracker and manual edits there are overwritten.
+- Auto-sync (optional) re-syncs shortly after any change to the job list. The chosen sheet and the auto-sync setting are remembered per browser in `localStorage`.
+- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins** and in the Firebase project's **Authorized domains**.
 
 ---
 
@@ -77,6 +84,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/api/auth/config` | Public. Supabase URL, anon key and Google client ID the browser needs to sign in |
 | `GET` | `/api/jobs` | All jobs, newest first (paged internally past Supabase's 1,000-row limit) |
 | `POST` | `/api/extract-job` | Ingest a URL and/or text; returns the saved job or a duplicate warning. With `candidateJob` + `confirmDuplicate` it saves a reviewed duplicate |
 | `PATCH` | `/api/jobs/:id` | Update status, notes, date applied or edited fields |
@@ -90,7 +98,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 
 ## 6. Data model
 
-`JobRecord` in `src/types.ts`; Postgres table `public.jobs` in `supabase/schema.sql` (keep both in sync).
+`JobRecord` in `src/types.ts`; Postgres table `public.jobs` in `supabase/schema.sql` (keep both in sync, and add the production SQL to `docs/MIGRATIONS.md`). The table also has `user_id` (owner, defaults to `auth.uid()`), which is not part of `JobRecord`.
 
 ```typescript
 type JobStatus = 'Saved' | 'Applied' | 'Interviewing' | 'Offer' | 'Accepted' | 'Rejected' | 'Declined';
@@ -110,7 +118,7 @@ interface JobRecord {
   industry: string;
   summary: string;
   url: string;
-  companyMetadata: { headcount?; headquarters?; ownership?; foundingYear? };
+  companyMetadata: { headcount?; headquarters?; ownership?; foundingYear?; source? };
   positionMetadata: { seniority?; department?; employmentType?; requiredSkills: string[]; team? };
   extractedVia?: string;        // pipeline tier that produced the snapshot
   createdAt: string;
@@ -130,5 +138,7 @@ interface JobRecord {
 | `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` |
+| `PORT` | Optional | Listen port (default 3000; Render sets it) |
+| `DISABLE_HMR` | Optional | `true` turns off Vite hot reload and file watching in dev |
 
-See `README.md` for local setup and deployment steps.
+See `README.md` for local setup and deployment steps, and `docs/MIGRATIONS.md` for upgrading an existing database.
