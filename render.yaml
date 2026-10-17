@@ -14,8 +14,9 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      # Public anon/publishable key. Users sign in with Google via Supabase Auth; row-level security scopes their data.
+      - key: SUPABASE_ANON_KEY
         sync: false
-      # Required in production: every /api call must present this key (the app prompts for it once per browser).
-      - key: API_ACCESS_KEY
-        generateValue: true
+      # Optional: jobs each user can add by link or pasted text per day (default 30; 0 turns the limit off).
+      - key: EXTRACTION_DAILY_LIMIT
+        sync: false

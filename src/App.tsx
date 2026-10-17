@@ -7,7 +7,6 @@ import { EditJobModal } from './components/EditJobModal';
 import { AtsDiagnosticModal } from './components/AtsDiagnosticModal';
 import { GoogleSheetsSyncModal } from './components/GoogleSheetsSyncModal';
 import { DuplicateWarningModal } from './components/DuplicateWarningModal';
-import { AccessKeyModal } from './components/AccessKeyModal';
 import { useGoogleSheetsSync } from './hooks/useGoogleSheetsSync';
 import { useJobsState } from './hooks/useJobsState';
 import { JobRecord } from './types';
@@ -32,7 +31,6 @@ export default function App() {
     isLoading,
     isIngesting,
     isImporting,
-    fetchJobs,
     handleIngest,
     handleStatusChange,
     handleUpdateJob,
@@ -232,9 +230,6 @@ export default function App() {
         onDisconnectSheet={sheetsSync.disconnectSheet}
         jobsCount={jobs.length}
       />
-
-      {/* Prompts for the API access key whenever the server answers 401 */}
-      <AccessKeyModal onSaved={fetchJobs} />
 
       {/* Duplicate Application Warning & Comparison Notification */}
       <DuplicateWarningModal

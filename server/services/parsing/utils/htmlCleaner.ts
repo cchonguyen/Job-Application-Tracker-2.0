@@ -3,6 +3,7 @@ import { deriveCompanyFromTitle, slugToCompanyName } from '../../../../src/lib/c
 import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { ExtractedJobAttributes, ScrapedHtmlData } from '../types.ts';
+import { fetchPublicUrl } from './safeFetch.ts';
 
 export const BANNED_HEADERS_REGEX = /^(job\s+description|job\s+summary|job\s+overview|job\s+details|position\s+overview|position\s+summary|role\s+overview|role\s+summary|about\s+the\s+role|about\s+the\s+job|about\s+the\s+team|about\s+us|who\s+we\s+are|what\s+you'?ll\s+do|what\s+you\s+will\s+do|what\s+you\s+bring|what\s+we'?re\s+looking\s+for|what\s+we\s+offer|who\s+you\s+are|responsibilities|key\s+responsibilities|essential\s+duties|qualifications|requirements|minimum\s+qualifications|preferred\s+qualifications|skills\s+and\s+experience|skills|experience|benefits|perks|compensation|total\s+rewards|pay\s+range|salary|location|remote|hybrid|apply\s+now|how\s+to\s+apply|equal\s+opportunity|overview|summary|description|introduction|careers?)$/i;
 
@@ -91,7 +92,7 @@ export function cleanCompanyName(rawUrl: string, ogSiteName?: string, text?: str
 }
 
 export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtmlData> {
-  const response = await fetch(urlStr, {
+  const response = await fetchPublicUrl(urlStr, {
     // Slow or hanging career sites must not stall the ingest; past this the pipeline moves on to Tier 4.
     signal: AbortSignal.timeout(10_000),
     headers: {

@@ -19,6 +19,7 @@ import {
   HelpCircle,
   Cpu,
   FileSpreadsheet,
+  LogOut,
 } from 'lucide-react';
 import { JobStatus } from '../types';
 import type { ThemeAccent, ThemeMode } from '../lib/theme';
@@ -27,6 +28,7 @@ import { ManualJobModal } from './ManualJobModal';
 import { DevSandboxModal } from './DevSandboxModal';
 import { BookmarkletModal } from './BookmarkletModal';
 import { PortalDropdown } from './PortalDropdown';
+import { useAccount } from './AuthGate';
 import { APP_VERSION, APP_COMMIT, formatBuildTime } from '../lib/appVersion';
 import type { User } from 'firebase/auth';
 import type { GoogleAuthUser } from '../lib/googleAuth';
@@ -79,6 +81,7 @@ export const HeaderActionPanel = ({
   const [targetStatus, setTargetStatus] = useState<JobStatus>('Applied');
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+  const account = useAccount();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [isBookmarkletOpen, setIsBookmarkletOpen] = useState(false);
@@ -232,6 +235,26 @@ export const HeaderActionPanel = ({
                   <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
                   <span>How Extraction Works</span>
                 </button>
+
+                {account && (
+                  <>
+                    <div className="border-t border-slate-100 my-1" />
+                    <div className="px-3 py-1 text-[11px] text-slate-500 truncate select-text" title={account.email || undefined}>
+                      {account.email || 'Signed in'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSettingsMenuOpen(false);
+                        account.signOut();
+                      }}
+                      className="w-full px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Sign out</span>
+                    </button>
+                  </>
+                )}
 
                 <div className="border-t border-slate-100 mt-1 mb-0.5" />
                 <div

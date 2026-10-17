@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { jobRepository } from '../services/storage/index.ts';
+import { scopeOf } from '../middleware/requireUser.ts';
 import { parseJobsFromCsv, parseJobsFromJson } from '../../src/utils/import.ts';
 import { resolveDateApplied } from '../../src/lib/jobDates.ts';
 import { appendStatusHistory, normalizeStatusHistory } from '../../src/lib/statusHistory.ts';
@@ -7,9 +8,9 @@ import { appendStatusHistory, normalizeStatusHistory } from '../../src/lib/statu
 export const jobsRouter = Router();
 
 // GET /api/jobs: Fetch all tracked jobs (read-only; saved jobs are point-in-time snapshots)
-jobsRouter.get('/', async (_req, res) => {
+jobsRouter.get('/', async (req, res) => {
   try {
-    const jobs = await jobRepository.listJobs();
+    const jobs = await jobRepository.listJobs(scopeOf(req));
     res.json({ success: true, jobs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -17,10 +18,11 @@ jobsRouter.get('/', async (_req, res) => {
 });
 
 // POST /api/jobs/reparse: Force re-parsing of all database entries
-jobsRouter.post('/reparse', async (_req, res) => {
+jobsRouter.post('/reparse', async (req, res) => {
   try {
-    const result = await jobRepository.reparseAllJobs();
-    const jobs = await jobRepository.listJobs();
+    const scope = scopeOf(req);
+    const result = await jobRepository.reparseAllJobs(scope);
+    const jobs = await jobRepository.listJobs(scope);
     res.json({ success: true, ...result, jobs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -33,7 +35,8 @@ jobsRouter.patch('/:id', async (req, res) => {
   const updates = req.body || {};
 
   try {
-    const existing = await jobRepository.getJobById(id);
+    const scope = scopeOf(req);
+    const existing = await jobRepository.getJobById(scope, id);
 
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Job not found' });
@@ -56,7 +59,7 @@ jobsRouter.patch('/:id', async (req, res) => {
       statusHistory = normalizeStatusHistory(updates.statusHistory);
     }
 
-    const job = await jobRepository.updateJob(id, {
+    const job = await jobRepository.updateJob(scope, id, {
       ...updates,
       dateApplied: finalDateApplied,
       statusHistory,
@@ -80,7 +83,7 @@ jobsRouter.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const deleted = await jobRepository.deleteJob(id);
+    const deleted = await jobRepository.deleteJob(scopeOf(req), id);
 
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Job not found' });
@@ -113,7 +116,7 @@ jobsRouter.post('/import', async (req, res) => {
       });
     }
 
-    const result = await jobRepository.upsertJobs(jobs);
+    const result = await jobRepository.upsertJobs(scopeOf(req), jobs);
     res.json({
       success: true,
       inserted: result.inserted,

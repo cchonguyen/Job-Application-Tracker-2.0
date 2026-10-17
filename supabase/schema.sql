@@ -1,5 +1,6 @@
 -- Run this in the Supabase SQL Editor (Dashboard → SQL Editor → New query).
--- Free tier Postgres. The app uses the service role key server-side only.
+-- Free tier Postgres. Users sign in with Google through Supabase Auth; the Express server queries as the signed-in
+-- user (anon key + their access token), so the row-level security policies below decide what each user can touch.
 
 -- ====================================================================
 -- QUICK FIX FOR EXISTING TABLES (Fixes missing 'team' column error):
@@ -25,7 +26,9 @@ create table if not exists public.jobs (
   extracted_via text,
   created_at timestamptz not null default now(),
   notes text not null default '',
-  status_history jsonb not null default '[]'::jsonb
+  status_history jsonb not null default '[]'::jsonb,
+  -- Owner of the row. Defaults to the signed-in user so the server never needs to trust a client-sent value.
+  user_id uuid default auth.uid() references auth.users (id) on delete cascade
 );
 
 -- Backward-compatible add for existing projects created before status_history
@@ -45,9 +48,28 @@ alter table public.jobs
 
 create index if not exists jobs_created_at_idx on public.jobs (created_at desc);
 
+-- Multi-user: every job belongs to one Supabase Auth user.
+alter table public.jobs
+  add column if not exists user_id uuid references auth.users (id) on delete cascade;
+alter table public.jobs alter column user_id set default auth.uid();
+create index if not exists jobs_user_created_idx on public.jobs (user_id, created_at desc);
+-- After rows created before sign-in existed have been assigned an owner (see the PR's migration steps), run:
+--   alter table public.jobs alter column user_id set not null;
+
 alter table public.jobs enable row level security;
 
--- No anon/authenticated policies: only the service role (used by the Express server) can read/write.
--- Do not put the service role key in frontend code.
+-- Each signed-in user can read and write only their own jobs. Signed-out (anon) requests match no policy.
+drop policy if exists jobs_select_own on public.jobs;
+drop policy if exists jobs_insert_own on public.jobs;
+drop policy if exists jobs_update_own on public.jobs;
+drop policy if exists jobs_delete_own on public.jobs;
+create policy jobs_select_own on public.jobs for select to authenticated using (user_id = (select auth.uid()));
+create policy jobs_insert_own on public.jobs for insert to authenticated with check (user_id = (select auth.uid()));
+create policy jobs_update_own on public.jobs for update to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy jobs_delete_own on public.jobs for delete to authenticated using (user_id = (select auth.uid()));
+
+grant select, insert, update, delete on public.jobs to authenticated;
+revoke all on public.jobs from anon;
 
 comment on table public.jobs is 'Job Application Easy Tracker records';
