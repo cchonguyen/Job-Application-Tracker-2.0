@@ -2,6 +2,17 @@
 
 Personal job-application tracker that ingests posting URLs (or pasted descriptions), extracts structured fields, and stores them in a spreadsheet-style UI.
 
+## Documentation
+
+| File | What it covers |
+|---|---|
+| [`PRD.md`](PRD.md) | What the app does and the rules it must keep: features, extraction pipeline, API, data model, configuration |
+| This README | Setup, deployment and scripts |
+| [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) | SQL to bring an existing production database up to date |
+| [`AGENTS.md`](AGENTS.md) | How to contribute: docs, schema and versioning rules |
+
+The docs change in the same PR as the code they describe; the **Docs updated** check enforces it.
+
 ## Features
 
 - Paste a Greenhouse, Lever, or career-page URL to extract company, title, location, salary, and metadata
@@ -45,6 +56,12 @@ Use this on Render Free so jobs survive redeploys and each user signs in with Go
 
 On startup the server logs `Persistence: Supabase with Google sign-in (…)` when configured.
 
+Upgrading a database created before v0.6.0? Follow [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) instead of step 2, including claiming your existing jobs after the first sign-in.
+
+### Google Sheets sync (optional)
+
+Sheets sync runs in the browser with its own Google OAuth client, set in [`firebase-applet-config.json`](firebase-applet-config.json) (`oAuthClientId` plus the Firebase project fields). On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud and to the Firebase project's **Authentication → Settings → Authorized domains**. See PRD 4.6 for how sync behaves.
+
 ### Security notes
 
 - The server queries Postgres as the signed-in user, so the row-level security policies in `schema.sql` are what keep accounts apart.
@@ -58,7 +75,7 @@ On startup the server logs `Persistence: Supabase with Google sign-in (…)` whe
 | `bun run dev` | Express + Vite middleware (port 3000) |
 | `bun run build` | Production client + server bundle |
 | `bun run start` | Run production server from `dist/` |
-| `bun run test` | Unit tests (ATS detection, salary parsing, date rules) |
+| `bun run test` | Unit tests (extraction, duplicates, import, sign-in middleware, rate limits, safe fetching, and more) |
 | `bun run lint` | Typecheck with `tsc --noEmit` |
 
 ## Deploy on Render
@@ -77,6 +94,8 @@ Environment variables:
 - `SUPABASE_ANON_KEY` = Supabase **anon / publishable** key. Required in production: the API returns 503 without Supabase.
 - `GOOGLE_OAUTH_CLIENT_ID` = optional; the Google client ID from Supabase's Google provider, so sign-in shows your app's name
 - `EXTRACTION_DAILY_LIMIT` = optional per-user daily extraction limit (default 30)
+
+`PORT` and `RENDER_GIT_COMMIT` are set by Render automatically; the commit feeds the version line in the Settings menu.
 
 Then **Manual Deploy**. Confirm logs show `Persistence: Supabase with Google sign-in`.
 

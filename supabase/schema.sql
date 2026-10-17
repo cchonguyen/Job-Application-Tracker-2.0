@@ -53,7 +53,7 @@ alter table public.jobs
   add column if not exists user_id uuid references auth.users (id) on delete cascade;
 alter table public.jobs alter column user_id set default auth.uid();
 create index if not exists jobs_user_created_idx on public.jobs (user_id, created_at desc);
--- After rows created before sign-in existed have been assigned an owner (see the PR's migration steps), run:
+-- After rows created before sign-in existed have been assigned an owner (see docs/MIGRATIONS.md, v0.6.0), run:
 --   alter table public.jobs alter column user_id set not null;
 
 alter table public.jobs enable row level security;
