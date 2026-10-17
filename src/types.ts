@@ -11,6 +11,8 @@ export interface CompanyMetadata {
   headquarters?: string;
   ownership?: 'Public' | 'Private' | 'Non-profit' | 'Unknown';
   foundingYear?: string | number;
+  /** Where the facts came from, e.g. "Wikidata (Q123)"; absent on jobs saved before company lookups. */
+  source?: string;
 }
 
 export interface PositionMetadata {

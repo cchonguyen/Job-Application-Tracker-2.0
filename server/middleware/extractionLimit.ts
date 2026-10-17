@@ -16,7 +16,10 @@ function utcDay(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Counts one extraction for the user; false once they have used up today's allowance. */
+/**
+ * Counts one use for the key (a user id, optionally prefixed by what it was spent on); false once that key has used
+ * up today's allowance.
+ */
 export function takeExtraction(userId: string, now = new Date()): boolean {
   const limit = dailyExtractionLimit();
   if (limit <= 0) return true;
@@ -56,6 +59,19 @@ export function extractionLimit(req: Request, res: Response, next: NextFunction)
       success: false,
       error: `Daily limit reached: you can add ${dailyExtractionLimit()} jobs by link or pasted text per day. Try again tomorrow.`,
     });
+    return;
+  }
+  next();
+}
+
+/**
+ * Company-fact lookups can run a Google-Search-grounded Gemini call, so they get their own daily allowance per user.
+ * It is separate from extractions so that browsing old jobs never blocks adding new ones.
+ */
+export function companyLookupLimit(req: Request, res: Response, next: NextFunction) {
+  const userId = req.user?.id;
+  if (userId && !takeExtraction(`company-facts:${userId}`)) {
+    res.status(429).json({ success: false, error: 'Daily company lookup limit reached. Try again tomorrow.' });
     return;
   }
   next();
