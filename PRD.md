@@ -25,6 +25,7 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Layer | Choice |
 |---|---|
 | UI | React 19, Vite, Tailwind CSS 4, `motion`, `lucide-react` |
+| Icons | Favicon is a white briefcase on an indigo (`#4f46e5`) rounded square: `public/favicon.svg`, with `favicon.ico` (16/32/48) and `apple-touch-icon.png` (180) fallbacks, linked from `index.html` |
 | Server | Express on Node, TypeScript via `tsx` in dev, bundled by `esbuild` to `dist/server.cjs` |
 | Extraction | Cheerio scraper, dedicated ATS APIs, Google Gemini (`@google/genai`, `gemini-3.8-flash`) |
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
