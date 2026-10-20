@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
+import type { AppEnv } from '../app.types.ts';
 import { parsingEngine } from '../services/parsing/index.ts';
 import { parseUrlDeterministically } from '../services/parsing/utils/htmlCleaner.ts';
 import { jobRepository, newJobId } from '../services/storage/index.ts';
@@ -10,25 +11,26 @@ import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
 import { parseJobTitleAndTeam } from '../../src/lib/jobsStore.ts';
 import { findPastSixMonthsDuplicates } from '../../src/lib/duplicateDetection.ts';
 import { resolveCompanyFacts } from '../services/company/companyFacts.ts';
+import { readJsonBody } from './readJsonBody.ts';
 
-export const extractRouter = Router();
+export const extractRouter = new Hono<AppEnv>();
 
 // POST /api/extract-job: Ingest URL or manual text, run pipeline, and append to spreadsheet
-extractRouter.post('/extract-job', extractionLimit, async (req, res) => {
-  const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = req.body;
-  const scope = scopeOf(req);
+extractRouter.post('/extract-job', extractionLimit, async (c) => {
+  const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = await readJsonBody(c);
+  const scope = scopeOf(c);
 
   // Direct fast save of pre-extracted candidate when user confirmed duplicate warning
   if (candidateJob && confirmDuplicate) {
     try {
       // The candidate round-trips through the browser, so the server picks its id.
       const saved = await jobRepository.createJob(scope, { ...candidateJob, id: newJobId() });
-      return res.json({
+      return c.json({
         success: true,
         job: saved,
       });
     } catch (err: any) {
-      return res.status(500).json({ success: false, error: err.message || 'Failed to save confirmed job' });
+      return c.json({ success: false, error: err.message || 'Failed to save confirmed job' }, 500);
     }
   }
 
@@ -106,7 +108,7 @@ extractRouter.post('/extract-job', extractionLimit, async (req, res) => {
     if (!confirmDuplicate) {
       const duplicates = findPastSixMonthsDuplicates(newJobRecord, existingJobs);
       if (duplicates.length > 0) {
-        return res.json({
+        return c.json({
           success: true,
           potentialDuplicate: true,
           candidateJob: newJobRecord,
@@ -119,49 +121,51 @@ extractRouter.post('/extract-job', extractionLimit, async (req, res) => {
 
     const saved = await jobRepository.createJob(scope, newJobRecord);
 
-    res.json({
+    return c.json({
       success: true,
       job: saved,
       tierUsed,
       diagnosticSteps,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to save job' });
+    return c.json({ success: false, error: err.message || 'Failed to save job' }, 500);
   }
 });
 
 // GET /api/company-facts?company=&url=&title=: look up employer facts for a job saved without them.
 // Read-only: the result is shown alongside the job but the stored snapshot is not changed.
-extractRouter.get('/company-facts', companyLookupLimit, async (req, res) => {
-  const company = String(req.query.company || '').trim();
+extractRouter.get('/company-facts', companyLookupLimit, async (c) => {
+  const company = String(c.req.query('company') || '').trim();
   if (!company) {
-    return res.status(400).json({ success: false, error: 'company is required' });
+    return c.json({ success: false, error: 'company is required' }, 400);
   }
+  const jobUrl = c.req.query('url');
+  const jobTitle = c.req.query('title');
   try {
     const facts = await resolveCompanyFacts({
       company,
-      existingJobs: await jobRepository.listJobs(scopeOf(req)),
-      jobUrl: req.query.url ? String(req.query.url) : undefined,
-      jobTitle: req.query.title ? String(req.query.title) : undefined,
+      existingJobs: await jobRepository.listJobs(scopeOf(c)),
+      jobUrl: jobUrl || undefined,
+      jobTitle: jobTitle || undefined,
     });
-    res.json({ success: true, facts });
+    return c.json({ success: true, facts });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Company lookup failed' });
+    return c.json({ success: false, error: err.message || 'Company lookup failed' }, 500);
   }
 });
 
 // POST /api/test-ats-diagnostic: Run ATS diagnostic on a test URL without saving
-extractRouter.post('/test-ats-diagnostic', extractionLimit, async (req, res) => {
-  const { url } = req.body;
+extractRouter.post('/test-ats-diagnostic', extractionLimit, async (c) => {
+  const { url } = await readJsonBody(c);
   if (!url) {
-    return res.status(400).json({ success: false, error: 'URL is required' });
+    return c.json({ success: false, error: 'URL is required' }, 400);
   }
 
   try {
     const ats = detectAts(url);
     const { extractedData, tierUsed, diagnosticSteps } = await parsingEngine.extract(url);
 
-    res.json({
+    return c.json({
       success: true,
       report: {
         targetUrl: url,
@@ -173,7 +177,7 @@ extractRouter.post('/test-ats-diagnostic', extractionLimit, async (req, res) => 
       },
     });
   } catch (err: any) {
-    res.json({
+    return c.json({
       success: false,
       report: {
         targetUrl: url,

@@ -1,22 +1,18 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getRequestListener } from '@hono/node-server';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-import { apiRouter } from './server/routes/index.ts';
+import { apiApp } from './server/routes/index.ts';
 import { isUsingSupabase, normalizeSupabaseUrl } from './server/services/storage/index.ts';
 
 dotenv.config();
-
-const __filename = typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '';
-const __dirname = __filename ? path.dirname(__filename) : '';
 
 const PORT = Number(process.env.PORT) || 3000;
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '10mb' }));
 
   let persistenceLabel =
     'Persistence: local spreadsheet_data.json, single local user (set SUPABASE_URL + SUPABASE_ANON_KEY to use Supabase sign-in)';
@@ -29,8 +25,9 @@ async function startServer() {
   }
   console.log(persistenceLabel);
 
-  // Mount modular API router
-  app.use('/api', apiRouter);
+  // The API is a Hono app shared with the Cloudflare Worker (worker.ts); Express only serves the front end here.
+  const api = getRequestListener(apiApp.fetch);
+  app.use((req, res, next) => (req.path === '/api' || req.path.startsWith('/api/') ? api(req, res) : next()));
 
   const server = http.createServer(app);
 

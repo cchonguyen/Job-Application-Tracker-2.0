@@ -1,21 +1,20 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
 import { isUsingSupabase, normalizeSupabaseUrl } from '../services/storage/index.ts';
 
-export const authConfigRouter = Router();
+export const authConfigRouter = new Hono();
 
 /**
  * GET /api/auth/config: what the browser needs to start Google sign-in. The anon key is public by design; row-level
  * security on the jobs table is what keeps each user's data private. Sign-in is off when Supabase isn't configured
  * (local development), and the app then runs as a single local user.
  */
-authConfigRouter.get('/config', (_req, res) => {
+authConfigRouter.get('/config', (c) => {
   const anonKey = process.env.SUPABASE_ANON_KEY?.trim();
   if (!isUsingSupabase() || !anonKey) {
-    res.json({ success: true, enabled: false });
-    return;
+    return c.json({ success: true, enabled: false });
   }
   try {
-    res.json({
+    return c.json({
       success: true,
       enabled: true,
       supabaseUrl: normalizeSupabaseUrl(process.env.SUPABASE_URL || ''),
@@ -25,6 +24,6 @@ authConfigRouter.get('/config', (_req, res) => {
       googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || undefined,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    return c.json({ success: false, error: err.message }, 500);
   }
 });

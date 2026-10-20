@@ -53,3 +53,16 @@ describe('assertPublicUrl', () => {
     await expect(assertPublicUrl('https://example.com:6379/', resolvesTo('104.18.32.7'))).rejects.toThrow(/port/);
   });
 });
+
+describe('isBlockedAddress edge cases', () => {
+  it.each(['::ffff:7f00:1', '0:0:0:0:0:0:0:1', '172.31.255.255', '224.0.0.1', 'not-an-ip', '1.2.3', '256.1.1.1'])(
+    'blocks %s',
+    (address) => {
+      expect(isBlockedAddress(address)).toBe(true);
+    }
+  );
+
+  it.each(['172.32.0.1', '100.128.0.1', '2001:4860:4860::8888'])('allows public %s', (address) => {
+    expect(isBlockedAddress(address)).toBe(false);
+  });
+});
