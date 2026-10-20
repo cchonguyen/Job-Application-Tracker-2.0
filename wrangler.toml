@@ -1,6 +1,6 @@
 # Cloudflare Workers config. Cloudflare builds with `bun run build`, then `npx wrangler deploy` uploads dist/ (the
 # app) and worker.ts (the /api server). Secrets and settings are added in the Cloudflare dashboard, not here.
-name = "job-application-tracker"
+name = "job-application-tracker-2-0"
 main = "worker.ts"
 compatibility_date = "2025-10-01"
 compatibility_flags = ["nodejs_compat"]

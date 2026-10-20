@@ -84,7 +84,7 @@ Sheets sync runs in the browser with its own Google OAuth client, set in [`fireb
 The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dist/`, and only `/api/*` runs code (`worker.ts`, configured in `wrangler.toml`).
 
 1. Run the SQL for the current version in [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) if you haven't.
-2. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository** → pick this repo.
+2. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository** → pick this repo. Name the Worker `job-application-tracker-2-0` (it must match `name` in `wrangler.toml`).
    - **Build command:** `bun install && bun run build`
    - **Deploy command:** `npx wrangler deploy`
    - Leave the production branch as `main`. Every push to `main` then builds and deploys.
