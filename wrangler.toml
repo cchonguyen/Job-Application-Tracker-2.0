@@ -4,6 +4,8 @@ name = "job-application-tracker"
 main = "worker.ts"
 compatibility_date = "2025-10-01"
 compatibility_flags = ["nodejs_compat"]
+# Keep variables added in the Cloudflare dashboard; without this every deploy deletes the plain-text ones.
+keep_vars = true
 
 [vars]
 NODE_ENV = "production"
