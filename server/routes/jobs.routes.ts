@@ -1,45 +1,47 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
+import type { AppEnv } from '../app.types.ts';
 import { jobRepository } from '../services/storage/index.ts';
 import { scopeOf } from '../middleware/requireUser.ts';
+import { readJsonBody } from './readJsonBody.ts';
 import { parseJobsFromCsv, parseJobsFromJson } from '../../src/utils/import.ts';
 import { resolveDateApplied } from '../../src/lib/jobDates.ts';
 import { appendStatusHistory, normalizeStatusHistory } from '../../src/lib/statusHistory.ts';
 
-export const jobsRouter = Router();
+export const jobsRouter = new Hono<AppEnv>();
 
 // GET /api/jobs: Fetch all tracked jobs (read-only; saved jobs are point-in-time snapshots)
-jobsRouter.get('/', async (req, res) => {
+jobsRouter.get('/', async (c) => {
   try {
-    const jobs = await jobRepository.listJobs(scopeOf(req));
-    res.json({ success: true, jobs });
+    const jobs = await jobRepository.listJobs(scopeOf(c));
+    return c.json({ success: true, jobs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    return c.json({ success: false, error: err.message }, 500);
   }
 });
 
 // POST /api/jobs/reparse: Force re-parsing of all database entries
-jobsRouter.post('/reparse', async (req, res) => {
+jobsRouter.post('/reparse', async (c) => {
   try {
-    const scope = scopeOf(req);
+    const scope = scopeOf(c);
     const result = await jobRepository.reparseAllJobs(scope);
     const jobs = await jobRepository.listJobs(scope);
-    res.json({ success: true, ...result, jobs });
+    return c.json({ success: true, ...result, jobs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    return c.json({ success: false, error: err.message }, 500);
   }
 });
 
 // PATCH /api/jobs/:id: Update status or edited fields
-jobsRouter.patch('/:id', async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body || {};
+jobsRouter.patch('/:id', async (c) => {
+  const id = c.req.param('id');
+  const updates = await readJsonBody(c);
 
   try {
-    const scope = scopeOf(req);
+    const scope = scopeOf(c);
     const existing = await jobRepository.getJobById(scope, id);
 
     if (!existing) {
-      return res.status(404).json({ success: false, error: 'Job not found' });
+      return c.json({ success: false, error: 'Job not found' }, 404);
     }
 
     const finalStatus = updates.status !== undefined ? updates.status : existing.status;
@@ -66,39 +68,37 @@ jobsRouter.patch('/:id', async (req, res) => {
     });
 
     if (!job) {
-      return res.status(404).json({ success: false, error: 'Job record not found for update' });
+      return c.json({ success: false, error: 'Job record not found for update' }, 404);
     }
 
-    res.setHeader('Content-Type', 'application/json');
-    res.json({ success: true, job });
+    return c.json({ success: true, job });
   } catch (err: any) {
     console.error('Error updating job:', err);
-    res.setHeader('Content-Type', 'application/json');
-    res.status(500).json({ success: false, error: err?.message || 'Failed to update job record' });
+    return c.json({ success: false, error: err?.message || 'Failed to update job record' }, 500);
   }
 });
 
 // DELETE /api/jobs/:id: Remove record from spreadsheet
-jobsRouter.delete('/:id', async (req, res) => {
-  const { id } = req.params;
+jobsRouter.delete('/:id', async (c) => {
+  const id = c.req.param('id');
 
   try {
-    const deleted = await jobRepository.deleteJob(scopeOf(req), id);
+    const deleted = await jobRepository.deleteJob(scopeOf(c), id);
 
     if (!deleted) {
-      return res.status(404).json({ success: false, error: 'Job not found' });
+      return c.json({ success: false, error: 'Job not found' }, 404);
     }
 
-    res.json({ success: true, message: 'Job deleted successfully' });
+    return c.json({ success: true, message: 'Job deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    return c.json({ success: false, error: err.message }, 500);
   }
 });
 
 // POST /api/jobs/import: Bulk import jobs from exported JSON or CSV payload
-jobsRouter.post('/import', async (req, res) => {
+jobsRouter.post('/import', async (c) => {
   try {
-    const { format, content, jobs: rawJobs } = req.body || {};
+    const { format, content, jobs: rawJobs } = await readJsonBody(c);
 
     let jobs;
     if (Array.isArray(rawJobs)) {
@@ -110,14 +110,17 @@ jobsRouter.post('/import', async (req, res) => {
         jobs = parseJobsFromJson(content).jobs;
       }
     } else {
-      return res.status(400).json({
-        success: false,
-        error: 'Provide { content: string, format?: "json"|"csv" } or { jobs: [...] }',
-      });
+      return c.json(
+        {
+          success: false,
+          error: 'Provide { content: string, format?: "json"|"csv" } or { jobs: [...] }',
+        },
+        400
+      );
     }
 
-    const result = await jobRepository.upsertJobs(scopeOf(req), jobs);
-    res.json({
+    const result = await jobRepository.upsertJobs(scopeOf(c), jobs);
+    return c.json({
       success: true,
       inserted: result.inserted,
       updated: result.updated,
@@ -125,6 +128,6 @@ jobsRouter.post('/import', async (req, res) => {
       jobs: result.jobs,
     });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || 'Import failed' });
+    return c.json({ success: false, error: err.message || 'Import failed' }, 400);
   }
 });

@@ -1,6 +1,8 @@
 import http from 'http';
 import type { AddressInfo } from 'net';
-import express from 'express';
+import { Hono } from 'hono';
+import { getRequestListener } from '@hono/node-server';
+import type { AppEnv } from '../../app.types.ts';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createRequireUser, type TokenVerifier } from '../requireUser.ts';
 
@@ -11,13 +13,13 @@ let baseUrl: string;
 const originalEnv = { ...process.env };
 
 beforeAll(async () => {
-  const app = express();
-  app.use('/api', createRequireUser(verify), (req, res) =>
-    res.json({ success: true, user: req.user, scopeUser: req.jobScope?.userId, hasDb: !!req.jobScope?.db })
+  const app = new Hono<AppEnv>();
+  app.use('/api', createRequireUser(verify));
+  app.get('/api', (c) =>
+    c.json({ success: true, user: c.get('user'), scopeUser: c.get('jobScope')?.userId, hasDb: !!c.get('jobScope')?.db })
   );
-  server = await new Promise<http.Server>((resolve) => {
-    const s = app.listen(0, '127.0.0.1', () => resolve(s));
-  });
+  server = http.createServer(getRequestListener(app.fetch));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 

@@ -40,7 +40,7 @@ Without Supabase env vars, sign-in is skipped and jobs are stored in gitignored 
 
 ## Supabase (storage and sign-in)
 
-Use this on Render Free so jobs survive redeploys and each user signs in with Google.
+Use this in production so jobs survive redeploys and each user signs in with Google.
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. Open **SQL Editor** → New query → paste and run [`supabase/schema.sql`](supabase/schema.sql).
@@ -50,8 +50,8 @@ Use this on Render Free so jobs survive redeploys and each user signs in with Go
 4. Turn on Google sign-in:
    - In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** (type *Web application*). Under **Authorized redirect URIs** add `https://YOUR_REF.supabase.co/auth/v1/callback`.
    - In Supabase **Authentication → Sign In / Providers → Google**, enable it and paste the client ID and secret.
-   - In Supabase **Authentication → URL Configuration**, set **Site URL** to your app URL (e.g. `https://your-app.onrender.com`) and add it, plus `http://localhost:3000` for local testing, to **Redirect URLs**.
-5. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to `.env` locally and to Render **Environment**.
+   - In Supabase **Authentication → URL Configuration**, set **Site URL** to your app URL (e.g. `https://jobs.example.com`) and add it, plus `http://localhost:3000` for local testing, to **Redirect URLs**.
+5. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to `.env` locally and to your host's settings (Cloudflare or Render, below).
 6. Optional but recommended: set `GOOGLE_OAUTH_CLIENT_ID` to the same Google client ID. Sign-in then runs in Google's popup on your site, so Google's account chooser names your app's address instead of `YOUR_REF.supabase.co`. Your app URL must be in the client's **Authorized JavaScript origins**.
 
 On startup the server logs `Persistence: Supabase with Google sign-in (…)` when configured.
@@ -65,20 +65,39 @@ Sheets sync runs in the browser with its own Google OAuth client, set in [`fireb
 ### Security notes
 
 - The server queries Postgres as the signed-in user, so the row-level security policies in `schema.sql` are what keep accounts apart.
-- Each user can add `EXTRACTION_DAILY_LIMIT` jobs by link or pasted text per day (default 30), since each one can spend Gemini quota.
+- Each user can add `EXTRACTION_DAILY_LIMIT` jobs by link or pasted text per day (default 30), since each one can spend Gemini quota. The counts are kept in Supabase (`daily_usage`), so they hold on Cloudflare too.
 - Job links are fetched only if they resolve to public addresses; private, loopback and cloud-metadata addresses are refused, including via redirects.
 
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `bun run dev` | Express + Vite middleware (port 3000) |
+| `bun run dev` | Node server with Vite middleware (port 3000) |
+| `npx wrangler dev` | After `bun run build`: run the Cloudflare Worker locally (port 8787) |
 | `bun run build` | Production client + server bundle |
 | `bun run start` | Run production server from `dist/` |
 | `bun run test` | Unit tests (extraction, duplicates, import, sign-in middleware, rate limits, safe fetching, and more) |
 | `bun run lint` | Typecheck with `tsc --noEmit` |
 
-## Deploy on Render
+## Deploy on Cloudflare
+
+The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dist/`, and only `/api/*` runs code (`worker.ts`, configured in `wrangler.toml`).
+
+1. Run the SQL for the current version in [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) if you haven't.
+2. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository** → pick this repo.
+   - **Build command:** `bun install && bun run build`
+   - **Deploy command:** `npx wrangler deploy`
+   - Leave the production branch as `main`. Every push to `main` then builds and deploys.
+3. Worker → **Settings** → **Variables and Secrets**, add (type **Secret** for the key, **Text** for the rest):
+   - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID` and `EXTRACTION_DAILY_LIMIT`. `NODE_ENV` comes from `wrangler.toml`.
+4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate.
+5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins**, and Firebase **Authorized domains** (see above).
+
+`WORKERS_CI_COMMIT_SHA` is set by Cloudflare's build and feeds the version line in the Settings menu. Logs: Worker → **Observability**.
+
+Limits to know: on the Workers Free plan each request gets 10 ms of CPU time (time spent waiting on Gemini, Supabase or a job page does not count) and 50 outbound requests. Most requests fit; if very large job pages fail with "exceeded CPU", the Workers Paid plan raises the CPU limit.
+
+## Deploy on Render (alternative)
 
 | Setting | Value |
 |---|---|
@@ -101,4 +120,4 @@ Then **Manual Deploy**. Confirm logs show `Persistence: Supabase with Google sig
 
 ## Stack
 
-React 19, Vite, Tailwind CSS 4, Express, Cheerio, Google Gemini (`@google/genai`), Supabase Postgres.
+React 19, Vite, Tailwind CSS 4, Hono (API), Express (Node host), Cloudflare Workers, Cheerio, Google Gemini (`@google/genai`), Supabase Postgres.

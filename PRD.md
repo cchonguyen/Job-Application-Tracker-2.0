@@ -26,11 +26,11 @@ Capture a job posting with one click from its link (or from the page you are vie
 |---|---|
 | UI | React 19, Vite, Tailwind CSS 4, `motion`, `lucide-react` |
 | Icons | Favicon is a white briefcase on an indigo (`#4f46e5`) rounded square: `public/favicon.svg`, with `favicon.ico` (16/32/48) and `apple-touch-icon.png` (180) fallbacks, linked from `index.html` |
-| Server | Express on Node, TypeScript via `tsx` in dev, bundled by `esbuild` to `dist/server.cjs` |
+| Server | The `/api` routes are one Hono app (`server/routes/index.ts`) that runs in two places: on Cloudflare Workers (`worker.ts`, `wrangler.toml`, with `nodejs_compat`), and on Node through `server.ts`, where Express also serves the client (Vite middleware in dev, `dist/` in production; bundled by `esbuild` to `dist/server.cjs`) |
 | Extraction | Cheerio scraper, dedicated ATS APIs, Google Gemini (`@google/genai`, `gemini-3.8-flash`) |
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
 | Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
-| Hosting | Render web service (`render.yaml`), built with Bun |
+| Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. The Render web service (`render.yaml`) still works as an alternative host. Both build with Bun |
 | Optional | Google Sheets sync from the browser (4.6), via a separate Google client in `firebase-applet-config.json` |
 
 ---
@@ -65,11 +65,12 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Anyone can sign up with Google. Each account sees, edits, imports and gets duplicate warnings against only its own jobs.
 - Every `/api` request (except `GET /api/auth/config`) carries the user's Supabase access token as `Authorization: Bearer <token>`. The server verifies it and queries Postgres as that user, so row-level security enforces ownership.
 - Imported jobs whose ids belong to someone else get a fresh id and become new rows; the server picks every new job's id.
-- Each user can run `EXTRACTION_DAILY_LIMIT` extractions per UTC day (default 30). Job links are fetched only when they resolve to public addresses.
+- Each user can run `EXTRACTION_DAILY_LIMIT` extractions per UTC day (default 30), and the same number of company-fact lookups, counted separately. With Supabase the counts live in `public.daily_usage` through `take_daily_usage()`, so they hold across restarts and across Worker instances; without Supabase, or if that function is missing, they are counted in the server's memory.
+- Job links are fetched only when they resolve to public addresses (checked on every redirect). On Node the check uses the system resolver; on Cloudflare it asks Cloudflare's DNS-over-HTTPS service.
 - Without Supabase the API runs as a single local user in development and returns 503 in production.
 
 ### 4.5 Versioning and checks
-- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`RENDER_GIT_COMMIT` on Render, else local git) show at the bottom of the Settings menu.
+- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`WORKERS_CI_COMMIT_SHA` on Cloudflare, `RENDER_GIT_COMMIT` on Render, else local git) show at the bottom of the Settings menu.
 - The **CI** check type-checks, tests and builds every PR.
 - The **Docs updated** check fails a PR that changes app files without changing a doc, and a `schema.sql` change without a `docs/MIGRATIONS.md` entry (`AGENTS.md`).
 
@@ -99,7 +100,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 
 ## 6. Data model
 
-`JobRecord` in `src/types.ts`; Postgres table `public.jobs` in `supabase/schema.sql` (keep both in sync, and add the production SQL to `docs/MIGRATIONS.md`). The table also has `user_id` (owner, defaults to `auth.uid()`), which is not part of `JobRecord`.
+`JobRecord` in `src/types.ts`; Postgres table `public.jobs` in `supabase/schema.sql` (keep both in sync, and add the production SQL to `docs/MIGRATIONS.md`). The table also has `user_id` (owner, defaults to `auth.uid()`), which is not part of `JobRecord`. A second table, `public.daily_usage` (`user_id`, `kind`, `day`, `count`), holds the daily-limit counters; users cannot read or write it directly, only through `take_daily_usage(p_kind, p_limit)`.
 
 ```typescript
 type JobStatus = 'Saved' | 'Applied' | 'Interviewing' | 'Offer' | 'Accepted' | 'Rejected' | 'Declined';
@@ -138,8 +139,8 @@ interface JobRecord {
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
 | `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
-| `NODE_ENV` | Production | `production` serves the built client from `dist/` |
-| `PORT` | Optional | Listen port (default 3000; Render sets it) |
+| `NODE_ENV` | Production | `production` serves the built client from `dist/` on Node, and makes the API refuse to run without Supabase. Set in `wrangler.toml` for Cloudflare |
+| `PORT` | Optional | Listen port on Node (default 3000; Render sets it). Unused on Cloudflare |
 | `DISABLE_HMR` | Optional | `true` turns off Vite hot reload and file watching in dev |
 
 See `README.md` for local setup and deployment steps, and `docs/MIGRATIONS.md` for upgrading an existing database.

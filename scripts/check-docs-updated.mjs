@@ -14,7 +14,7 @@ const isTest = (f) => f.includes('/__tests__/') || /\.test\.[cm]?[jt]sx?$/.test(
 const isCode = (f) =>
   !isTest(f) &&
   (/^(src|server|supabase)\//.test(f) ||
-    ['server.ts', 'render.yaml', '.env.example', 'vite.config.ts', 'index.html'].includes(f));
+    ['server.ts', 'worker.ts', 'wrangler.toml', 'render.yaml', '.env.example', 'vite.config.ts', 'index.html'].includes(f));
 const isDoc = (f) => /^[^/]+\.md$/.test(f) || f.startsWith('docs/');
 
 const code = changed.filter(isCode);

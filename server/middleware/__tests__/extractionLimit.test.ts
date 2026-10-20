@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { resetExtractionUsage, takeExtraction } from '../extractionLimit.ts';
+import { resetExtractionUsage, takeDailyUsage, takeExtraction } from '../extractionLimit.ts';
 
 const original = process.env.EXTRACTION_DAILY_LIMIT;
 
@@ -37,5 +37,28 @@ describe('daily extraction limit', () => {
   it('is off when set to 0', () => {
     process.env.EXTRACTION_DAILY_LIMIT = '0';
     for (let i = 0; i < 100; i++) expect(takeExtraction('a')).toBe(true);
+  });
+});
+
+describe('takeDailyUsage', () => {
+  const scopeWith = (rpc: (...args: any[]) => Promise<{ data: unknown; error: unknown }>) =>
+    ({ userId: 'user-a', db: { rpc } }) as any;
+
+  it('uses the Supabase counter when it answers', async () => {
+    process.env.EXTRACTION_DAILY_LIMIT = '5';
+    const calls: any[] = [];
+    const scope = scopeWith(async (...args) => {
+      calls.push(args);
+      return { data: false, error: null };
+    });
+    expect(await takeDailyUsage(scope, 'extraction')).toBe(false);
+    expect(calls).toEqual([['take_daily_usage', { p_kind: 'extraction', p_limit: 5 }]]);
+  });
+
+  it('falls back to counting in memory when the counter is missing', async () => {
+    process.env.EXTRACTION_DAILY_LIMIT = '1';
+    const scope = scopeWith(async () => ({ data: null, error: { message: 'function not found' } }));
+    expect(await takeDailyUsage(scope, 'extraction')).toBe(true);
+    expect(await takeDailyUsage(scope, 'extraction')).toBe(false);
   });
 });

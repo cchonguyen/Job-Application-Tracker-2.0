@@ -3,7 +3,9 @@ import os from 'os';
 import path from 'path';
 import http from 'http';
 import type { AddressInfo } from 'net';
-import express from 'express';
+import { Hono } from 'hono';
+import { getRequestListener } from '@hono/node-server';
+import type { AppEnv } from '../../app.types.ts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 // A title the parser would split into "Senior Software Engineer" + team "Platform".
@@ -42,21 +44,19 @@ beforeAll(async () => {
   const { jobsRouter } = await import('../jobs.routes.ts');
   const { extractRouter } = await import('../extract.routes.ts');
   const { LOCAL_DEV_USER_ID } = await import('../../../src/lib/jobsStore.ts');
-  const app = express();
-  app.use(express.json());
+  const app = new Hono<AppEnv>();
   // Stands in for requireUser: each request acts as the user named in x-test-user (default: the local user,
   // who owns records saved before accounts existed).
-  app.use((req, _res, next) => {
-    const id = req.get('x-test-user') || LOCAL_DEV_USER_ID;
-    req.user = { id, email: null };
-    req.jobScope = { userId: id, db: null };
-    next();
+  app.use('*', async (c, next) => {
+    const id = c.req.header('x-test-user') || LOCAL_DEV_USER_ID;
+    c.set('user', { id, email: null });
+    c.set('jobScope', { userId: id, db: null });
+    await next();
   });
-  app.use('/api/jobs', jobsRouter);
-  app.use('/api', extractRouter);
-  server = await new Promise<http.Server>((resolve) => {
-    const s = app.listen(0, '127.0.0.1', () => resolve(s));
-  });
+  app.route('/api/jobs', jobsRouter);
+  app.route('/api', extractRouter);
+  server = http.createServer(getRequestListener(app.fetch));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 

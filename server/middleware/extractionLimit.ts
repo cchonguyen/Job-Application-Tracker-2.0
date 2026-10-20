@@ -1,4 +1,6 @@
-import type { NextFunction, Request, Response } from 'express';
+import type { MiddlewareHandler } from 'hono';
+import type { AppEnv } from '../app.types.ts';
+import type { JobScope } from '../services/storage/index.ts';
 
 const DEFAULT_DAILY_LIMIT = 30;
 
@@ -17,8 +19,8 @@ function utcDay(now: Date): string {
 }
 
 /**
- * Counts one use for the key (a user id, optionally prefixed by what it was spent on); false once that key has used
- * up today's allowance.
+ * In-memory count for one key (a user id, optionally prefixed by what it was spent on); false once that key has used
+ * up today's allowance. Used in local development and as the fallback when the Supabase counter is unavailable.
  */
 export function takeExtraction(userId: string, now = new Date()): boolean {
   const limit = dailyExtractionLimit();
@@ -42,37 +44,66 @@ export function resetExtractionUsage(): void {
   usage.clear();
 }
 
+export type UsageKind = 'extraction' | 'company-facts';
+
+let warnedFallback = false;
+
+/**
+ * Counts one use of `kind` for the signed-in user; false once today's allowance is spent. With Supabase the count
+ * lives in the database (`take_daily_usage`), so it holds across restarts and across the many short-lived copies of
+ * the server that Cloudflare runs. If that call fails (for example the migration has not been applied yet) the count
+ * falls back to this process's memory rather than blocking the user.
+ */
+export async function takeDailyUsage(scope: JobScope, kind: UsageKind): Promise<boolean> {
+  const limit = dailyExtractionLimit();
+  if (limit <= 0) return true;
+  const memoryKey = kind === 'extraction' ? scope.userId : `${kind}:${scope.userId}`;
+  if (!scope.db) return takeExtraction(memoryKey);
+
+  const { data, error } = await scope.db.rpc('take_daily_usage', { p_kind: kind, p_limit: limit });
+  if (error || typeof data !== 'boolean') {
+    if (!warnedFallback) {
+      warnedFallback = true;
+      console.warn('Daily limit counter in Supabase unavailable, counting in memory instead:', error?.message ?? data);
+    }
+    return takeExtraction(memoryKey);
+  }
+  return data;
+}
+
 /**
  * Every extraction can spend Gemini quota and make the server fetch a URL, so each signed-in user gets a daily
- * allowance. Counts live in memory: a restart resets them, which is acceptable on a single small instance.
+ * allowance.
  */
-export function extractionLimit(req: Request, res: Response, next: NextFunction) {
-  const userId = req.user?.id;
+export const extractionLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const scope = c.get('jobScope');
   // Saving a job the user already extracted (after a duplicate warning) runs no extraction.
-  const savesConfirmedCandidate = Boolean(req.body?.candidateJob && req.body?.confirmDuplicate);
-  if (!userId || savesConfirmedCandidate) {
-    next();
+  const body = await c.req.json().catch(() => ({}));
+  const savesConfirmedCandidate = Boolean(body?.candidateJob && body?.confirmDuplicate);
+  if (!scope || savesConfirmedCandidate) {
+    await next();
     return;
   }
-  if (!takeExtraction(userId)) {
-    res.status(429).json({
-      success: false,
-      error: `Daily limit reached: you can add ${dailyExtractionLimit()} jobs by link or pasted text per day. Try again tomorrow.`,
-    });
-    return;
+  if (!(await takeDailyUsage(scope, 'extraction'))) {
+    return c.json(
+      {
+        success: false,
+        error: `Daily limit reached: you can add ${dailyExtractionLimit()} jobs by link or pasted text per day. Try again tomorrow.`,
+      },
+      429
+    );
   }
-  next();
-}
+  await next();
+};
 
 /**
  * Company-fact lookups can run a Google-Search-grounded Gemini call, so they get their own daily allowance per user.
  * It is separate from extractions so that browsing old jobs never blocks adding new ones.
  */
-export function companyLookupLimit(req: Request, res: Response, next: NextFunction) {
-  const userId = req.user?.id;
-  if (userId && !takeExtraction(`company-facts:${userId}`)) {
-    res.status(429).json({ success: false, error: 'Daily company lookup limit reached. Try again tomorrow.' });
-    return;
+export const companyLookupLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const scope = c.get('jobScope');
+  if (scope && !(await takeDailyUsage(scope, 'company-facts'))) {
+    return c.json({ success: false, error: 'Daily company lookup limit reached. Try again tomorrow.' }, 429);
   }
-  next();
-}
+  await next();
+};
