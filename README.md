@@ -60,7 +60,12 @@ Upgrading a database created before v0.6.0? Follow [`docs/MIGRATIONS.md`](docs/M
 
 ### Google Sheets sync (optional)
 
-Sheets sync runs in the browser with its own Google OAuth client, set in [`firebase-applet-config.json`](firebase-applet-config.json) (`oAuthClientId` plus the Firebase project fields). On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud and to the Firebase project's **Authentication → Settings → Authorized domains**. See PRD 4.6 for how sync behaves.
+Sheets sync runs in the browser and asks the user for Drive and Sheets access through a Google OAuth client:
+
+- **With `GOOGLE_OAUTH_CLIENT_ID` set (recommended):** it uses that same client. In that client's Google Cloud project, enable the **Google Sheets API** and **Google Drive API**, and add the Drive and Sheets scopes (`.../auth/drive`, `.../auth/drive.file`, `.../auth/drive.readonly`, `.../auth/spreadsheets`, `.../auth/spreadsheets.readonly`) under **OAuth consent screen → Data Access**. While the app is unverified, Google shows an "unverified app" warning, and in **Testing** mode only listed test users can connect.
+- **Without it:** it falls back to the AI Studio client in [`firebase-applet-config.json`](firebase-applet-config.json) (`oAuthClientId` plus the Firebase project fields), and your app URL must be in that client's **Authorized JavaScript origins** and in the Firebase project's **Authentication → Settings → Authorized domains**.
+
+See PRD 4.6 for how sync behaves.
 
 ### Security notes
 
@@ -91,7 +96,7 @@ The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dis
 3. Worker → **Settings** → **Variables and Secrets**, add each as type **Secret** (secrets always survive deploys; `keep_vars` in `wrangler.toml` also keeps plain-text ones):
    - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID` and `EXTRACTION_DAILY_LIMIT`. `NODE_ENV` comes from `wrangler.toml`.
 4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate.
-5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins**, and Firebase **Authorized domains** (see above).
+5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, and the Google OAuth client's **Authorized JavaScript origins** (plus Firebase **Authorized domains** only if Sheets sync runs without `GOOGLE_OAUTH_CLIENT_ID`; see above).
 
 `WORKERS_CI_COMMIT_SHA` is set by Cloudflare's build and feeds the version line in the Settings menu. Logs: Worker → **Observability**.
 
