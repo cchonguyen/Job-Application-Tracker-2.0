@@ -7,6 +7,7 @@ import {
   type User,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { getAuthConfig } from './auth';
 
 declare global {
   interface Window {
@@ -69,16 +70,26 @@ export const loadGsi = (): Promise<boolean> => {
   });
 };
 
-export const signInWithGsi = async (): Promise<{ user: GoogleAuthUser; accessToken: string }> => {
+/**
+ * The OAuth client Sheets sync asks for Drive and Sheets access with: the deployment's own GOOGLE_OAUTH_CLIENT_ID when
+ * set (the same client as app sign-in), otherwise the AI Studio client in firebase-applet-config.json.
+ */
+const sheetsClientId = async (): Promise<{ clientId: string; ownClient: boolean }> => {
+  const config = await getAuthConfig().catch(() => null);
+  if (config?.googleClientId) return { clientId: config.googleClientId, ownClient: true };
+  return { clientId: firebaseConfig.oAuthClientId, ownClient: false };
+};
+
+export const signInWithGsi = async (clientId: string): Promise<{ user: GoogleAuthUser; accessToken: string }> => {
   await loadGsi();
-  if (!window.google?.accounts?.oauth2 || !firebaseConfig.oAuthClientId) {
+  if (!window.google?.accounts?.oauth2 || !clientId) {
     throw new Error('Google Identity Services client is not initialized or OAuth Client ID is missing.');
   }
 
   return new Promise((resolve, reject) => {
     try {
       const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: firebaseConfig.oAuthClientId,
+        client_id: clientId,
         scope: WORKSPACE_SCOPES.join(' '),
         callback: async (response: any) => {
           if (response.error) {
@@ -158,10 +169,11 @@ export const googleSignIn = async (): Promise<{ user: GoogleAuthUser | User; acc
     isSigningIn = true;
 
     // 1. First attempt: Google Identity Services (GIS) Token Client
-    // This connects directly using the provisioned Google Cloud OAuth Client ID, bypassing Firebase Auth domain checks
-    if (firebaseConfig.oAuthClientId) {
+    // This connects directly using the Google Cloud OAuth Client ID, bypassing Firebase Auth domain checks
+    const { clientId, ownClient } = await sheetsClientId();
+    if (clientId) {
       try {
-        const gisResult = await signInWithGsi();
+        const gisResult = await signInWithGsi(clientId);
         if (gisResult?.accessToken) {
           cachedAccessToken = gisResult.accessToken;
           cachedUser = gisResult.user;
@@ -176,6 +188,10 @@ export const googleSignIn = async (): Promise<{ user: GoogleAuthUser | User; acc
           gisError?.message?.includes('user_cancel')
         ) {
           throw new Error('Sign-in popup was closed before authorization.');
+        }
+        // The Firebase fallback belongs to the AI Studio project, so it can't help when the deployment's own client failed.
+        if (ownClient) {
+          throw gisError instanceof Error ? gisError : new Error(gisError?.message || gisError?.type || 'Google sign-in failed.');
         }
       }
     }
