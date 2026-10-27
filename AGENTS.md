@@ -10,6 +10,7 @@ The docs are the source of truth for what the app does and how it is meant to wo
 | `README.md` | Local setup, Supabase and Google setup, deploy steps, scripts |
 | `docs/MIGRATIONS.md` | SQL and manual steps to bring the production database up to date, newest first |
 | `AGENTS.md` | How to work on this repo (this file) |
+| `.spec/` | Harness state: short overview, scope contract, decisions log, and the single-slice progress lock |
 
 When making a change:
 - Find every statement in those files that the change makes untrue, and fix it. A new route, env var, status, field, limit or product rule gets a line in the table or section that lists its kind.
@@ -29,3 +30,10 @@ Every pull request must bump `version` in `package.json` (enforced by the `Versi
 - **PATCH** (`0.2.0` → `0.2.1`) for fixes, refactors, docs, and chores.
 
 If another PR merges first with the same number, rebase or merge `main` and bump again so each deploy carries a distinct version. The version and the deployed commit are shown at the bottom of the Settings menu (gear icon), so a successful deploy is visible at a glance.
+
+## Claude Code harness
+
+This repo uses the claude-harness-hub harness (version in `.harness-version`). `CLAUDE.md` imports this file and `.claude/harness-rules.md`; where they differ, this file wins.
+- `.claude/` holds the slash commands (`/triage`, `/spec`, `/implement`, `/learn`, `/prep-audit`, `/ingest-feedback`, `/sync-harness`), subagents and hook settings. `.harness/` holds the Node hooks and scripts they run.
+- Do not edit `.claude/` or `.harness/` here by hand. Change them in claude-harness-hub and run `/sync-harness` (with that repo attached to the session) to pull them in.
+- `.spec/PROGRESS.md` sets the work mode: no `[IN_PROGRESS]` line means edit freely; one means only that slice's target files may change.
