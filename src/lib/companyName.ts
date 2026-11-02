@@ -4,7 +4,7 @@
 
 // Words that never represent a real employer brand. Used to reject ATS platform
 // names, generic career-site boilerplate, and location/role noise.
-const NON_COMPANY_TOKENS = new Set([
+export const NON_COMPANY_TOKENS = new Set([
   'workable',
   'greenhouse',
   'lever',
@@ -19,6 +19,26 @@ const NON_COMPANY_TOKENS = new Set([
   'bamboohr',
   'recruitee',
   'breezy',
+  'pinpoint',
+  'teamtailor',
+  'personio',
+  'rippling',
+  'dover',
+  'jazzhr',
+  'paylocity',
+  'taleo',
+  'oracle',
+  'successfactors',
+  'linkedin',
+  'indeed',
+  'glassdoor',
+  'wellfound',
+  'angellist',
+  'builtin',
+  'ziprecruiter',
+  'yc',
+  'ycombinator',
+  'applytojob',
   'apply',
   'jobs',
   'job',

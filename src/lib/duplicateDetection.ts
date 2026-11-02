@@ -1,4 +1,5 @@
 import type { JobRecord } from '../types';
+import { canonicalizeJobUrl } from './atsDetect';
 
 export type DuplicateMatchType = 'both' | 'company' | 'role';
 
@@ -139,15 +140,56 @@ export function atsCompanySlug(url?: string | null): string {
   try {
     const parsed = new URL(url.trim().includes('://') ? url.trim() : `https://${url.trim()}`);
     const host = parsed.hostname.toLowerCase();
-    const first = parsed.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || '';
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const first = parts[0]?.toLowerCase() || '';
+
+    // Greenhouse
     if (/(^|\.)greenhouse\.io$/.test(host)) {
       return first === 'embed' ? (parsed.searchParams.get('for') || '').toLowerCase() : first;
     }
-    if (/^(jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com|jobs\.smartrecruiters\.com)$/.test(host)) {
+    // Lever, Ashby, Workable, SmartRecruiters, Gem
+    if (
+      /^(jobs\.lever\.co|jobs\.eu\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com|jobs\.smartrecruiters\.com|careers\.smartrecruiters\.com|jobs\.gem\.com)$/.test(
+        host
+      )
+    ) {
       return first;
     }
-    const sub = host.match(/^([a-z0-9-]+)\.(recruitee\.com|breezy\.hr|bamboohr\.com|myworkdayjobs\.com)$/);
+    // Workday: {tenant}.wd5.myworkdayjobs.com or {tenant}.myworkdayjobs.com
+    const wdMatch = host.match(/^([a-z0-9_-]+)(?:\.(?:wd\d+))?\.myworkdayjobs\.com$/);
+    if (wdMatch) return wdMatch[1];
+
+    // Subdomain-based ATS providers: Recruitee, Breezy, BambooHR, Pinpoint, Teamtailor, JazzHR, Darwinbox
+    const sub = host.match(
+      /^([a-z0-9_-]+)\.(recruitee\.com|breezy\.hr|bamboohr\.com|pinpointhq\.com|teamtailor\.com|applytojob\.com|darwinbox\.(?:com|in))$/
+    );
     if (sub) return sub[1];
+
+    // Personio: {company}.jobs.personio.de or {company}.personio.de
+    const personioMatch = host.match(/^([a-z0-9_-]+)(?:\.jobs)?\.personio\.(?:de|com)$/);
+    if (personioMatch) return personioMatch[1];
+
+    // iCIMS: {company}.icims.com or careers-{company}.icims.com
+    const icimsMatch = host.match(/^(?:careers-)?([a-z0-9_-]+)\.icims\.com$/);
+    if (icimsMatch) return icimsMatch[1];
+
+    // Rippling: ats.rippling.com/{company}/jobs/...
+    if (host === 'ats.rippling.com') return first;
+
+    // Dover: app.dover.com/apply/{company}/...
+    if (host === 'app.dover.com' || host === 'dover.com') {
+      const applyIdx = parts.indexOf('apply');
+      if (applyIdx !== -1 && parts[applyIdx + 1]) return parts[applyIdx + 1].toLowerCase();
+    }
+
+    // Jobvite: jobs.jobvite.com/{company}/...
+    if (host === 'jobs.jobvite.com') return first;
+
+    // Paylocity: recruiting.paylocity.com/recruiting/jobs/Details/{jobId}/{company}
+    if (host.includes('paylocity.com')) {
+      const detailsIdx = parts.findIndex((p) => p.toLowerCase() === 'details');
+      if (detailsIdx !== -1 && parts[detailsIdx + 2]) return parts[detailsIdx + 2].toLowerCase();
+    }
   } catch {
     // Not a URL; no slug.
   }
@@ -309,11 +351,16 @@ export function normalizeJobUrl(url?: string | null): string {
   const raw = url.trim();
   if (!raw) return '';
   try {
-    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    const { canonicalUrl } = canonicalizeJobUrl(raw);
+    const parsed = new URL(canonicalUrl.includes('://') ? canonicalUrl : `https://${canonicalUrl}`);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
     const path = parsed.pathname.replace(/\/+$/, '').toLowerCase();
     const keep = [...parsed.searchParams.entries()]
-      .filter(([k]) => /^(gh_jid|jid|job_?id|id|req(uisition)?_?id|posting_?id)$/i.test(k))
+      .filter(([k]) =>
+        /^(gh_jid|ashby_jid|jid|job_?id|id|requisition_?no|req(uisition)?_?id|posting_?id|token|for|jk|vjk|currentjobid|career_job_req_id|job)$/i.test(
+          k
+        )
+      )
       .map(([k, v]) => `${k.toLowerCase()}=${v}`)
       .sort()
       .join('&');

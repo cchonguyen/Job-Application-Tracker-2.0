@@ -9,6 +9,7 @@ describe('detectAts', () => {
       type: 'greenhouse',
       board: 'figma',
       jobId: '5912401',
+      canonicalUrl: 'https://boards.greenhouse.io/figma/jobs/5912401',
     });
   });
 
@@ -19,6 +20,7 @@ describe('detectAts', () => {
       type: 'greenhouse',
       board: 'acme',
       jobId: 'abc123',
+      canonicalUrl: 'https://boards.greenhouse.io/embed/job_app?for=acme&token=abc123',
     });
   });
 
@@ -31,6 +33,7 @@ describe('detectAts', () => {
       type: 'greenhouse',
       board: 'datavant',
       jobId: '5301310008',
+      canonicalUrl: 'https://datavant.com/about/careers/open-roles/job?job_id=5301310008',
     });
   });
 
@@ -41,6 +44,7 @@ describe('detectAts', () => {
       type: 'lever',
       board: 'datadog',
       jobId: '883b1092-c419-4cb5-bf9e-e38029d20c54',
+      canonicalUrl: 'https://jobs.lever.co/datadog/883b1092-c419-4cb5-bf9e-e38029d20c54',
     });
   });
 
@@ -53,6 +57,9 @@ describe('detectAts', () => {
       type: 'darwinbox',
       board: 'transcarent',
       jobId: 'a6a7106352a0d2',
+      requiresBrowserAuth: true,
+      canonicalUrl:
+        'https://transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2',
     });
   });
 
@@ -63,6 +70,7 @@ describe('detectAts', () => {
       type: 'workable',
       board: 'innovaccer-analytics',
       jobId: '461A138133',
+      canonicalUrl: 'https://apply.workable.com/innovaccer-analytics/j/461A138133',
     });
   });
 
@@ -73,6 +81,7 @@ describe('detectAts', () => {
       type: 'workable',
       board: 'innovaccer-analytics',
       jobId: '461A138133',
+      canonicalUrl: 'https://apply.workable.com/innovaccer-analytics/jobs/view/461A138133',
     });
   });
 
@@ -81,6 +90,7 @@ describe('detectAts', () => {
       type: 'workable',
       board: 'acme',
       jobId: 'ABCDEF1234',
+      canonicalUrl: 'https://acme.workable.com/j/ABCDEF1234',
     });
   });
 
@@ -91,11 +101,15 @@ describe('detectAts', () => {
       type: 'ashby',
       board: 'Overjet',
       jobId: '3b74e8b2-0872-48a6-8995-663b944c89aa',
+      canonicalUrl: 'https://jobs.ashbyhq.com/Overjet/3b74e8b2-0872-48a6-8995-663b944c89aa',
     });
   });
 
   it('returns null for unknown career pages', () => {
-    expect(detectAts('https://stripe.com/jobs/listing/staff-engineer/1')).toEqual({ type: null });
+    expect(detectAts('https://stripe.com/jobs/listing/staff-engineer/1')).toEqual({
+      type: null,
+      canonicalUrl: 'https://stripe.com/jobs/listing/staff-engineer/1',
+    });
   });
 
   it('returns null for invalid URLs', () => {
@@ -137,10 +151,12 @@ describe('extractSalaryFromTextOrJson', () => {
     expect(res.salary).toBe('45k - 65k');
   });
 
-  it('falls back to company benchmarks when text has no salary', () => {
+  it('does not fall back to synthetic benchmark salary (zero-fabrication)', () => {
     expect(getBenchmarkSalary('Datavant', 'Sr. Product Manager')).toContain('170k');
     const res = extractSalaryFromTextOrJson('No pay listed', null, 'Datavant', 'Product Manager');
-    expect(res.salary).toContain('170k');
+    expect(res.salary).toBe('Not listed');
+    expect(res.salaryMin).toBeNull();
+    expect(res.salaryMax).toBeNull();
   });
 
   it('returns Not listed when nothing matches', () => {

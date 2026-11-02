@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { deriveCompanyFromTitle, slugToCompanyName } from '../../../../src/lib/companyName.ts';
+import { deriveCompanyFromTitle, slugToCompanyName, NON_COMPANY_TOKENS } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { ExtractedJobAttributes, ScrapedHtmlData } from '../types.ts';
@@ -7,18 +7,7 @@ import { fetchPublicUrl } from './safeFetch.ts';
 
 export const BANNED_HEADERS_REGEX = /^(job\s+description|job\s+summary|job\s+overview|job\s+details|position\s+overview|position\s+summary|role\s+overview|role\s+summary|about\s+the\s+role|about\s+the\s+job|about\s+the\s+team|about\s+us|who\s+we\s+are|what\s+you'?ll\s+do|what\s+you\s+will\s+do|what\s+you\s+bring|what\s+we'?re\s+looking\s+for|what\s+we\s+offer|who\s+you\s+are|responsibilities|key\s+responsibilities|essential\s+duties|qualifications|requirements|minimum\s+qualifications|preferred\s+qualifications|skills\s+and\s+experience|skills|experience|benefits|perks|compensation|total\s+rewards|pay\s+range|salary|location|remote|hybrid|apply\s+now|how\s+to\s+apply|equal\s+opportunity|overview|summary|description|introduction|careers?)$/i;
 
-export const OG_SITE_NAME_ATS_NOISE = [
-  'workday',
-  'greenhouse',
-  'ashby',
-  'gem',
-  'lever',
-  'workable',
-  'smartrecruiters',
-  'icims',
-  'jobvite',
-  'job',
-];
+export const OG_SITE_NAME_ATS_NOISE = Array.from(NON_COMPANY_TOKENS);
 
 export const GENERIC_HOST_TOKENS = ['jobs', 'careers', 'boards', 'job-boards', 'app', 'apply', 'career'];
 
