@@ -3,7 +3,13 @@ import { deriveCompanyFromTitle, slugToCompanyName, NON_COMPANY_TOKENS } from '.
 import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { ExtractedJobAttributes, ScrapedHtmlData } from '../types.ts';
-import { fetchPublicUrl } from './safeFetch.ts';
+import { fetchPublicUrl, readResponseTextUpTo } from './safeFetch.ts';
+import {
+  cleanHtmlDescription,
+  decodeHtmlEntities,
+  extractSchemaOrgJobPosting,
+  SchemaOrgJobPostingResult,
+} from './schemaOrgNormalizer.ts';
 
 export const BANNED_HEADERS_REGEX = /^(job\s+description|job\s+summary|job\s+overview|job\s+details|position\s+overview|position\s+summary|role\s+overview|role\s+summary|about\s+the\s+role|about\s+the\s+job|about\s+the\s+team|about\s+us|who\s+we\s+are|what\s+you'?ll\s+do|what\s+you\s+will\s+do|what\s+you\s+bring|what\s+we'?re\s+looking\s+for|what\s+we\s+offer|who\s+you\s+are|responsibilities|key\s+responsibilities|essential\s+duties|qualifications|requirements|minimum\s+qualifications|preferred\s+qualifications|skills\s+and\s+experience|skills|experience|benefits|perks|compensation|total\s+rewards|pay\s+range|salary|location|remote|hybrid|apply\s+now|how\s+to\s+apply|equal\s+opportunity|overview|summary|description|introduction|careers?)$/i;
 
@@ -80,6 +86,47 @@ export function cleanCompanyName(rawUrl: string, ogSiteName?: string, text?: str
   }
 }
 
+/**
+ * Recursively inspects a parsed JavaScript / JSON hydration state object for job posting data.
+ */
+function findJobInSpaObject(obj: any, depth = 0): any | null {
+  if (!obj || typeof obj !== 'object' || depth > 8) return null;
+
+  // Direct job object detection
+  if (
+    (typeof obj.title === 'string' || typeof obj.jobTitle === 'string') &&
+    (typeof obj.description === 'string' ||
+      typeof obj.jobDescription === 'string' ||
+      Array.isArray(obj.requirements) ||
+      typeof obj.content === 'string')
+  ) {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findJobInSpaObject(item, depth + 1);
+      if (found) return found;
+    }
+  } else {
+    const priorityKeys = ['job', 'jobPosting', 'posting', 'jobData', 'position', 'pageProps', 'props', 'data'];
+    for (const k of priorityKeys) {
+      if (obj[k]) {
+        const found = findJobInSpaObject(obj[k], depth + 1);
+        if (found) return found;
+      }
+    }
+    for (const k of Object.keys(obj)) {
+      if (!priorityKeys.includes(k) && typeof obj[k] === 'object' && obj[k] !== null) {
+        const found = findJobInSpaObject(obj[k], depth + 1);
+        if (found) return found;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtmlData> {
   const response = await fetchPublicUrl(urlStr, {
     // Slow or hanging career sites must not stall the ingest; past this the pipeline moves on to Tier 4.
@@ -98,35 +145,227 @@ export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtml
     throw new Error(`Scraper received HTTP ${status} from target server`);
   }
 
-  const html = await response.text();
+  // Stream-bounded fetch up to 2MB to protect Worker and V8 memory
+  const html = await readResponseTextUpTo(response, 2 * 1024 * 1024);
   const $ = cheerio.load(html);
 
-  // Extract JSON-LD
-  let jsonLd: any = null;
+  // 1. Extract JSON-LD candidates across all <script type="application/ld+json"> tags
+  const jsonLdCandidates: any[] = [];
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
       const content = $(el).html();
-      if (!content) return;
-      const parsed = JSON.parse(content);
-      if (
-        parsed['@type'] === 'JobPosting' ||
-        (Array.isArray(parsed['@graph']) && parsed['@graph'].some((item: any) => item['@type'] === 'JobPosting'))
-      ) {
-        jsonLd = parsed['@type'] === 'JobPosting' ? parsed : parsed['@graph'].find((item: any) => item['@type'] === 'JobPosting');
-      } else if (!jsonLd) {
-        jsonLd = parsed;
+      if (content) {
+        jsonLdCandidates.push(JSON.parse(content));
       }
     } catch {
-      // Ignore JSON parse error
+      // Ignore JSON parse errors for malformed snippets
     }
   });
+
+  let normalizedJob = extractSchemaOrgJobPosting(jsonLdCandidates);
+  let jsonLd: any = normalizedJob
+    ? {
+        ...normalizedJob.raw,
+        _normalized: normalizedJob,
+        title: normalizedJob.title,
+        company: normalizedJob.company,
+        location: normalizedJob.location,
+        salary: normalizedJob.salary,
+        salaryMin: normalizedJob.salaryMin,
+        salaryMax: normalizedJob.salaryMax,
+      }
+    : jsonLdCandidates[0] || null;
+
+  // 2. SPA Hydration State Extraction (__NEXT_DATA__, __INITIAL_STATE__, __PRELOADED_STATE__)
+  let spaState: any = null;
+  const nextDataHtml = $('script#__NEXT_DATA__').html();
+  if (nextDataHtml) {
+    try {
+      const parsedNext = JSON.parse(nextDataHtml);
+      const schemaFromNext = extractSchemaOrgJobPosting(parsedNext);
+      if (schemaFromNext && !normalizedJob) {
+        normalizedJob = schemaFromNext;
+        jsonLd = {
+          ...schemaFromNext.raw,
+          _normalized: schemaFromNext,
+          title: schemaFromNext.title,
+          company: schemaFromNext.company,
+          location: schemaFromNext.location,
+          salary: schemaFromNext.salary,
+          salaryMin: schemaFromNext.salaryMin,
+          salaryMax: schemaFromNext.salaryMax,
+        };
+      }
+      const rawJobState = findJobInSpaObject(parsedNext?.props?.pageProps || parsedNext);
+      if (rawJobState) {
+        spaState = rawJobState;
+      }
+    } catch {}
+  }
+
+  if (!spaState) {
+    $('script:not([src])').each((_, el) => {
+      if (spaState) return;
+      const scriptContent = $(el).html() || '';
+      if (
+        scriptContent.includes('__INITIAL_STATE__') ||
+        scriptContent.includes('__PRELOADED_STATE__') ||
+        scriptContent.includes('__APOLLO_STATE__')
+      ) {
+        const stateMatch = scriptContent.match(
+          /window\.(?:__INITIAL_STATE__|__PRELOADED_STATE__|__APOLLO_STATE__)\s*=\s*(\{.*?\});/s
+        );
+        if (stateMatch && stateMatch[1]) {
+          try {
+            const parsed = JSON.parse(stateMatch[1]);
+            const schemaFromState = extractSchemaOrgJobPosting(parsed);
+            if (schemaFromState && !normalizedJob) {
+              normalizedJob = schemaFromState;
+              jsonLd = {
+                ...schemaFromState.raw,
+                _normalized: schemaFromState,
+                title: schemaFromState.title,
+                company: schemaFromState.company,
+                location: schemaFromState.location,
+                salary: schemaFromState.salary,
+                salaryMin: schemaFromState.salaryMin,
+                salaryMax: schemaFromState.salaryMax,
+              };
+            }
+            const foundState = findJobInSpaObject(parsed);
+            if (foundState) {
+              spaState = foundState;
+            }
+          } catch {}
+        }
+      }
+    });
+  }
+
+  // 3. Embedded Greenhouse / Ashby discovery (Refinement 9)
+  let detectedAts: { type: string; board?: string; jobId?: string } | undefined;
+
+  // Search Greenhouse script/iframe embeds
+  $('script[src*="greenhouse.io"], iframe[src*="greenhouse.io"], a[href*="greenhouse.io"]').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('href') || '';
+    const forMatch = src.match(/[?&]for=([a-zA-Z0-9_-]+)/i);
+    const tokenMatch = src.match(/[?&]token=([0-9]+)/i) || src.match(/\/jobs\/([0-9]+)/i);
+    const boardMatch = src.match(/boards(?:-api)?\.greenhouse\.io\/(?:v1\/boards\/)?([a-zA-Z0-9_-]+)/i);
+
+    const b = forMatch?.[1] || boardMatch?.[1];
+    const j = tokenMatch?.[1];
+
+    if (b && (!detectedAts || detectedAts.type !== 'greenhouse')) {
+      detectedAts = {
+        type: 'greenhouse',
+        board: b,
+        jobId: j,
+      };
+    } else if (j && detectedAts && detectedAts.type === 'greenhouse' && !detectedAts.jobId) {
+      detectedAts.jobId = j;
+    }
+  });
+
+  // Search Ashby script/iframe embeds
+  if (!detectedAts) {
+    $('script[src*="ashbyhq.com"], iframe[src*="ashbyhq.com"], a[href*="ashbyhq.com"]').each((_, el) => {
+      const src = $(el).attr('src') || $(el).attr('href') || '';
+      const ashbyMatch = src.match(/jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)(?:\/([a-zA-Z0-9_-]{8,}))?/i);
+      if (ashbyMatch && ashbyMatch[1]) {
+        if (!detectedAts) {
+          detectedAts = {
+            type: 'ashby',
+            board: ashbyMatch[1],
+            jobId: ashbyMatch[2],
+          };
+        } else if (ashbyMatch[2] && !detectedAts.jobId) {
+          detectedAts.jobId = ashbyMatch[2];
+        }
+      }
+    });
+  }
+
+  // 4. iCIMS iframe unwrapping: if page contains #icims_content_iframe or iframe pointing to icims.com,
+  // or is an iCIMS shell without content, fetch ?in_iframe=1 to retrieve inner Schema.org JSON-LD & DOM.
+  const icimsIframe = $('iframe#icims_content_iframe, iframe[src*="icims.com"], iframe[name="icims_content_iframe"]');
+  const isIcimsPortal = urlStr.includes('icims.com') || icimsIframe.length > 0;
+
+  if (isIcimsPortal && !jsonLd?._normalized) {
+    let iframeUrl: string | null = null;
+    const iframeSrc = icimsIframe.attr('src');
+    if (iframeSrc) {
+      try {
+        iframeUrl = new URL(iframeSrc, urlStr).toString();
+      } catch {}
+    } else if (urlStr.includes('icims.com') && !urlStr.includes('in_iframe=1')) {
+      try {
+        const u = new URL(urlStr);
+        u.searchParams.set('in_iframe', '1');
+        iframeUrl = u.toString();
+      } catch {}
+    }
+
+    if (iframeUrl) {
+      try {
+        if (!iframeUrl.includes('in_iframe=1')) {
+          const u = new URL(iframeUrl);
+          u.searchParams.set('in_iframe', '1');
+          iframeUrl = u.toString();
+        }
+        const innerResp = await fetchPublicUrl(iframeUrl, {
+          signal: AbortSignal.timeout(6000),
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+        });
+        if (innerResp.ok) {
+          const innerHtml = await readResponseTextUpTo(innerResp, 2 * 1024 * 1024);
+          const $inner = cheerio.load(innerHtml);
+
+          const innerCandidates: any[] = [];
+          $inner('script[type="application/ld+json"]').each((_, el) => {
+            try {
+              const c = $inner(el).html();
+              if (c) innerCandidates.push(JSON.parse(c));
+            } catch {}
+          });
+
+          const innerNormalized = extractSchemaOrgJobPosting(innerCandidates);
+          if (innerNormalized) {
+            normalizedJob = innerNormalized;
+            jsonLd = {
+              ...innerNormalized.raw,
+              _normalized: innerNormalized,
+              title: innerNormalized.title,
+              company: innerNormalized.company,
+              location: innerNormalized.location,
+              salary: innerNormalized.salary,
+              salaryMin: innerNormalized.salaryMin,
+              salaryMax: innerNormalized.salaryMax,
+            };
+          }
+
+          // If inner page has rich job content, use it to augment DOM text
+          $inner('script, style, noscript, svg, nav, footer, header').remove();
+          const innerMainText = $inner('.iCIMS_JobContent, .icims_job_content, main, article, body').text();
+          if (innerMainText && innerMainText.trim().length > 150) {
+            $('body').append(`<div>${innerMainText}</div>`);
+          }
+        }
+      } catch {
+        // Iframe fetch failure is non-fatal; continue with outer page data
+      }
+    }
+  }
 
   // Extract Meta tags
   const ogTitle = $('meta[property="og:title"]').attr('content');
   const ogDescription = $('meta[property="og:description"]').attr('content');
   const ogSiteName = $('meta[property="og:site_name"]').attr('content');
   const metaDescription = $('meta[name="description"]').attr('content');
-  const title = $('title').text() || '';
+  const title = normalizedJob?.title || $('title').text() || '';
 
   // Clean body text
   $('script, style, noscript, iframe, svg, nav, footer, header').remove();
@@ -138,6 +377,15 @@ export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtml
   const metaText = [metaDescription, ogDescription].filter(Boolean).join('\n\n');
   if (metaText.length > 100 && (!mainText || mainText.trim().length < 200 || metaText.length > mainText.length)) {
     mainText = [metaText, mainText].filter(Boolean).join('\n\n');
+  }
+
+  // If normalized description from JSON-LD or SPA is available and DOM text is sparse, augment it
+  const spaRawDesc = spaState?.description || spaState?.jobDescription || spaState?.content;
+  if ((!mainText || mainText.trim().length < 200) && normalizedJob?.description) {
+    mainText = [normalizedJob.description, mainText].filter(Boolean).join('\n\n');
+  } else if ((!mainText || mainText.trim().length < 200) && spaRawDesc) {
+    const cleanSpaDesc = cleanHtmlDescription(String(spaRawDesc));
+    mainText = [cleanSpaDesc, mainText].filter(Boolean).join('\n\n');
   }
 
   const cleanedText = mainText
@@ -154,6 +402,8 @@ export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtml
     jsonLd,
     cleanedText,
     rawHtmlStatus: status,
+    detectedAts,
+    spaState,
   };
 }
 
@@ -358,6 +608,20 @@ export function parseUrlDeterministically(urlStr: string, scraped?: ScrapedHtmlD
     salaryInfo = extractSalaryFromTextOrJson(combinedScrapedText, scraped.jsonLd);
     if (combinedScrapedText && /remote/i.test(combinedScrapedText)) {
       location = 'Remote';
+    }
+
+    if (scraped.jsonLd?._normalized) {
+      const norm = scraped.jsonLd._normalized as SchemaOrgJobPostingResult;
+      if (norm.title) jobTitle = norm.title;
+      if (norm.company) company = norm.company;
+      if (norm.location) location = norm.location;
+      if (norm.salary && norm.salary !== 'Not listed') {
+        salaryInfo = {
+          salary: norm.salary,
+          salaryMin: norm.salaryMin ?? null,
+          salaryMax: norm.salaryMax ?? null,
+        };
+      }
     }
   }
 

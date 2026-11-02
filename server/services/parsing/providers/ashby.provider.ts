@@ -4,6 +4,7 @@ import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 import { AtsProvider, AtsProviderResult } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
+import { fetchPublicUrl } from '../utils/safeFetch.ts';
 
 interface AshbyCompensationComponent {
   compensationType?: string;
@@ -56,7 +57,7 @@ export class AshbyProvider implements AtsProvider {
    */
   private async fetchApi(board: string, jobId: string): Promise<AshbyPosting> {
     const apiUrl = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(board)}?includeCompensation=true`;
-    const response = await fetch(apiUrl, {
+    const response = await fetchPublicUrl(apiUrl, {
       signal: AbortSignal.timeout(6000),
       headers: {
         Accept: 'application/json',

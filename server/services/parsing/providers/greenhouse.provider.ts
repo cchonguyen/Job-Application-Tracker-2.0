@@ -4,6 +4,7 @@ import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 import { AtsProvider, AtsProviderResult } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
+import { fetchPublicUrl } from '../utils/safeFetch.ts';
 
 export class GreenhouseProvider implements AtsProvider {
   readonly name = 'Greenhouse';
@@ -19,7 +20,7 @@ export class GreenhouseProvider implements AtsProvider {
     for (const b of candidateBoards) {
       try {
         const apiUrl = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(b)}/jobs/${encodeURIComponent(jobId)}`;
-        const response = await fetch(apiUrl, {
+        const response = await fetchPublicUrl(apiUrl, {
           signal: AbortSignal.timeout(4000),
           headers: {
             Accept: 'application/json',
