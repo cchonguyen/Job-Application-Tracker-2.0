@@ -4,19 +4,20 @@ import { parsingEngine } from '../services/parsing/index.ts';
 import { parseUrlDeterministically } from '../services/parsing/utils/htmlCleaner.ts';
 import { jobRepository, newJobId } from '../services/storage/index.ts';
 import { scopeOf } from '../middleware/requireUser.ts';
-import { companyLookupLimit, extractionLimit } from '../middleware/extractionLimit.ts';
-import { detectAts } from '../../src/lib/atsDetect.ts';
+import { companyLookupLimit, extractionLimit, takeDailyUsage } from '../middleware/extractionLimit.ts';
+import { detectAts, canonicalizeJobUrl } from '../../src/lib/atsDetect.ts';
 import { initialDateAppliedForStatus } from '../../src/lib/jobDates.ts';
 import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
 import { parseJobTitleAndTeam } from '../../src/lib/jobsStore.ts';
-import { findPastSixMonthsDuplicates } from '../../src/lib/duplicateDetection.ts';
+import { findPastSixMonthsDuplicates, normalizeJobUrl } from '../../src/lib/duplicateDetection.ts';
 import { resolveCompanyFacts } from '../services/company/companyFacts.ts';
 import { readJsonBody } from './readJsonBody.ts';
+import { needsManualReview } from '../../src/lib/formatHelpers.ts';
 
 export const extractRouter = new Hono<AppEnv>();
 
 // POST /api/extract-job: Ingest URL or manual text, run pipeline, and append to spreadsheet
-extractRouter.post('/extract-job', extractionLimit, async (c) => {
+extractRouter.post('/extract-job', async (c) => {
   const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = await readJsonBody(c);
   const scope = scopeOf(c);
 
@@ -34,6 +35,9 @@ extractRouter.post('/extract-job', extractionLimit, async (c) => {
     }
   }
 
+  const rawUrl = typeof url === 'string' ? url.trim() : '';
+  const canonicalUrl = rawUrl ? canonicalizeJobUrl(rawUrl).canonicalUrl || rawUrl : '';
+
   const finalStatus = initialStatus || 'Applied';
   const dateApplied = initialDateAppliedForStatus(finalStatus);
 
@@ -42,13 +46,15 @@ extractRouter.post('/extract-job', extractionLimit, async (c) => {
   let extractedData: any = null;
 
   try {
-    const result = await parsingEngine.extract(url, manualText);
+    const result = await parsingEngine.extract(canonicalUrl || rawUrl, manualText, {
+      checkAiQuota: () => takeDailyUsage(scope, 'extraction'),
+    });
     extractedData = result.extractedData;
     tierUsed = result.tierUsed;
     diagnosticSteps = result.diagnosticSteps;
   } catch (err: any) {
     console.warn('Extraction pipeline warning:', err?.message);
-    extractedData = parseUrlDeterministically(url || 'https://company.com/job', null);
+    extractedData = parseUrlDeterministically(canonicalUrl || rawUrl || 'https://company.com/job', null);
     diagnosticSteps = [
       {
         tier: 'Safety Fallback',
@@ -68,13 +74,56 @@ extractRouter.post('/extract-job', extractionLimit, async (c) => {
       company,
       extracted: extractedData.companyMetadata,
       existingJobs,
-      jobUrl: url,
+      jobUrl: canonicalUrl || undefined,
       jobTitle: extractedData.jobTitle,
     });
     const parsedRoleTeam = parseJobTitleAndTeam(
       extractedData.jobTitle || 'Unknown Role',
       extractedData.team
     );
+
+    // Decision 3: In-place auto-upgrade of incomplete "Needs review" stubs
+    const isComplete = !needsManualReview(tierUsed);
+    const normCanonical = normalizeJobUrl(canonicalUrl);
+
+    if (isComplete && normCanonical) {
+      const existingStub = existingJobs.find(
+        (existing) =>
+          normalizeJobUrl(existing.url) === normCanonical &&
+          needsManualReview(existing.extractedVia)
+      );
+
+      if (existingStub) {
+        const updatedJob = await jobRepository.updateJob(scope, existingStub.id, {
+          company,
+          jobTitle: parsedRoleTeam.jobTitle || 'Unknown Role',
+          team: parsedRoleTeam.team || extractedData.team || undefined,
+          location: extractedData.location || 'Not listed',
+          salary: extractedData.salary || 'Not listed',
+          salaryMin: extractedData.salaryMin ?? null,
+          salaryMax: extractedData.salaryMax ?? null,
+          industry: extractedData.industry || 'Unknown',
+          summary: extractedData.summary || '',
+          companyMetadata,
+          positionMetadata: {
+            seniority: extractedData.positionMetadata?.seniority || 'Unknown',
+            department: extractedData.positionMetadata?.department || 'Unknown',
+            employmentType: extractedData.positionMetadata?.employmentType || 'Unknown',
+            requiredSkills: extractedData.positionMetadata?.requiredSkills || [],
+          },
+          extractedVia: tierUsed,
+          url: canonicalUrl,
+        });
+
+        return c.json({
+          success: true,
+          job: updatedJob || existingStub,
+          upgradedExistingStub: true,
+          diagnosticSteps,
+          tierUsed,
+        });
+      }
+    }
 
     const newJobRecord = {
       id: newJobId(),
@@ -90,7 +139,7 @@ extractRouter.post('/extract-job', extractionLimit, async (c) => {
       dateAdded: nowIso.split('T')[0],
       industry: extractedData.industry || 'Unknown',
       summary: extractedData.summary || '',
-      url: url || '',
+      url: canonicalUrl || '',
       companyMetadata,
       positionMetadata: {
         seniority: extractedData.positionMetadata?.seniority || 'Unknown',
@@ -155,20 +204,26 @@ extractRouter.get('/company-facts', companyLookupLimit, async (c) => {
 });
 
 // POST /api/test-ats-diagnostic: Run ATS diagnostic on a test URL without saving
-extractRouter.post('/test-ats-diagnostic', extractionLimit, async (c) => {
+extractRouter.post('/test-ats-diagnostic', async (c) => {
   const { url } = await readJsonBody(c);
   if (!url) {
     return c.json({ success: false, error: 'URL is required' }, 400);
   }
 
+  const rawUrl = String(url).trim();
+  const canonicalUrl = rawUrl ? canonicalizeJobUrl(rawUrl).canonicalUrl || rawUrl : '';
+
   try {
-    const ats = detectAts(url);
-    const { extractedData, tierUsed, diagnosticSteps } = await parsingEngine.extract(url);
+    const scope = scopeOf(c);
+    const ats = detectAts(canonicalUrl);
+    const { extractedData, tierUsed, diagnosticSteps } = await parsingEngine.extract(canonicalUrl, undefined, {
+      checkAiQuota: () => takeDailyUsage(scope, 'extraction'),
+    });
 
     return c.json({
       success: true,
       report: {
-        targetUrl: url,
+        targetUrl: canonicalUrl,
         detectedAts: ats.type ? `${ats.type.toUpperCase()} (Board: ${ats.board}, ID: ${ats.jobId})` : null,
         overallSuccess: true,
         finalTier: tierUsed,
@@ -180,7 +235,7 @@ extractRouter.post('/test-ats-diagnostic', extractionLimit, async (c) => {
     return c.json({
       success: false,
       report: {
-        targetUrl: url,
+        targetUrl: canonicalUrl || rawUrl,
         overallSuccess: false,
         finalTier: 'Failed',
         error: err.message,

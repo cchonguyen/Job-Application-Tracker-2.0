@@ -20,6 +20,26 @@ const PRESET_TEST_CASES = [
     description: 'Tests Tier 1 direct Lever v0 Postings REST API fetch',
   },
   {
+    name: 'Workday Enterprise CXS API Test',
+    url: 'https://adobe.wd5.myworkdayjobs.com/en-US/external_experienced/job/San-Jose/Software-Engineer_R142385',
+    description: 'Tests Tier 1 Workday CXS client endpoint (/wday/cxs) with automatic fallback to Tier 2 SSR JSON-LD',
+  },
+  {
+    name: 'SmartRecruiters Public REST API Test',
+    url: 'https://jobs.smartrecruiters.com/Visa/743999962312345-staff-software-engineer',
+    description: 'Tests Tier 1 SmartRecruiters public posting REST API v1',
+  },
+  {
+    name: 'Pinpoint ATS Structured JSON Test',
+    url: 'https://demo.pinpointhq.com/postings/12345678-abcd-1234-abcd-1234567890ab',
+    description: 'Tests Tier 1 Pinpoint ATS endpoint appending .json for structured compensation and job metadata',
+  },
+  {
+    name: 'BambooHR Careers API Test',
+    url: 'https://demo.bamboohr.com/careers/123',
+    description: 'Tests Tier 1 BambooHR /careers/{id}/detail public JSON endpoint',
+  },
+  {
     name: 'Direct HTML / Career Page Test',
     url: 'https://stripe.com/jobs/listing/staff-full-stack-engineer/6091234',
     description: 'Tests Tier 2 Cheerio DOM + JSON-LD scraping followed by Tier 3 Gemini extraction',
@@ -28,6 +48,11 @@ const PRESET_TEST_CASES = [
     name: 'Darwinbox SPA Portal (Transcarent)',
     url: 'https://transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2',
     description: 'Tests detection of Angular SPA (<app-root>) and Cloudflare 403 bot guard diagnostics',
+  },
+  {
+    name: 'LinkedIn WAF Bot-Wall Short-Circuit',
+    url: 'https://www.linkedin.com/jobs/view/3829104821',
+    description: 'Tests Phase 0 canonicalization, HTTP 999 WAF detection, and immediate short-circuiting to Tier 5 Deterministic Stub',
   },
   {
     name: 'Anti-Bot / JS Shell URL Test',

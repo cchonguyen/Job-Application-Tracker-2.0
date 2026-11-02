@@ -99,7 +99,15 @@ describe('duplicateDetection', () => {
       expect(atsCompanySlug('https://job-boards.greenhouse.io/mavenclinic/jobs/88')).toBe('mavenclinic');
       expect(atsCompanySlug('https://jobs.ashbyhq.com/atticus/67f7fa65')).toBe('atticus');
       expect(atsCompanySlug('https://jobs.lever.co/acme/abc')).toBe('acme');
-      expect(atsCompanySlug('https://acme.wd5.myworkdayjobs.com/x')).toBe('');
+      expect(atsCompanySlug('https://acme.wd5.myworkdayjobs.com/x')).toBe('acme');
+      expect(atsCompanySlug('https://target.myworkdayjobs.com/targetcareers')).toBe('target');
+      expect(atsCompanySlug('https://jobs.smartrecruiters.com/Square/123')).toBe('square');
+      expect(atsCompanySlug('https://acme.pinpointhq.com/postings/123')).toBe('acme');
+      expect(atsCompanySlug('https://acme.bamboohr.com/careers/123')).toBe('acme');
+      expect(atsCompanySlug('https://acme.recruitee.com/o/123')).toBe('acme');
+      expect(atsCompanySlug('https://acme.breezy.hr/p/123')).toBe('acme');
+      expect(atsCompanySlug('https://acme.jobs.personio.de/job/123')).toBe('acme');
+      expect(atsCompanySlug('https://acme.teamtailor.com/jobs/123')).toBe('acme');
       expect(atsCompanySlug('https://example.com/careers/1')).toBe('');
     });
   });
@@ -117,6 +125,23 @@ describe('duplicateDetection', () => {
       expect(normalizeJobUrl('https://acme.com/careers?gh_jid=42')).not.toBe(
         normalizeJobUrl('https://acme.com/careers?gh_jid=43')
       );
+      expect(normalizeJobUrl('https://acme.com/jobs?ashby_jid=abc-123')).toBe(
+        'acme.com/jobs?ashby_jid=abc-123'
+      );
+    });
+
+    it('canonicalizes and strips /apply and aggregator view URLs', () => {
+      expect(normalizeJobUrl('https://jobs.lever.co/acme/123/apply?utm_source=li')).toBe(
+        'jobs.lever.co/acme/123'
+      );
+      expect(
+        normalizeJobUrl(
+          'https://www.linkedin.com/jobs/view/software-engineer-at-acme-1234567890?refId=xyz'
+        )
+      ).toBe('linkedin.com/jobs/view/1234567890');
+      expect(
+        normalizeJobUrl('https://www.indeed.com/jobs?q=engineer&vjk=7d8e6f1a&utm_campaign=x')
+      ).toBe('indeed.com/viewjob?jk=7d8e6f1a');
     });
   });
 

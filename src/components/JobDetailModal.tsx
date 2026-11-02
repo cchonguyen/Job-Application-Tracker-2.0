@@ -15,6 +15,8 @@ import {
   Banknote,
   Factory,
   Clock,
+  AlertTriangle,
+  Bookmark,
 } from 'lucide-react';
 import { JobRecord, JobStatus } from '../types';
 import { CompanyLogo } from './CompanyLogo';
@@ -22,6 +24,7 @@ import { getStatusMeta, STATUS_ORDER } from '../lib/statusMeta';
 import { normalizeStatusHistory } from '../lib/statusHistory';
 import { needsManualReview } from '../lib/formatHelpers';
 import { useCompanyFacts } from '../hooks/useCompanyFacts';
+import { BookmarkletModal } from './BookmarkletModal';
 
 interface JobDetailModalProps {
   job: JobRecord | null;
@@ -65,6 +68,7 @@ export const JobDetailModal = ({
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isSavingDate, setIsSavingDate] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isBookmarkletOpen, setIsBookmarkletOpen] = useState(false);
   const dragControls = useDragControls();
 
   // Prevent background layer from moving/scrolling on mobile while modal is open
@@ -238,6 +242,44 @@ export const JobDetailModal = ({
 
             {/* Content — min-h-0 for nested flex scroll */}
             <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 overflow-y-auto overscroll-contain flex-1 min-h-0">
+              {needsManualReview(job.extractedVia) && (
+                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/80 text-amber-900 space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 text-xs sm:text-sm">
+                      <p className="font-semibold text-amber-900">
+                        Incomplete snapshot • Portal blocked automated reading
+                      </p>
+                      <p className="text-amber-800 mt-1 leading-relaxed">
+                        This portal&apos;s bot-protection or login wall prevented our automated scanner from reading the full job posting.
+                        You can complete this snapshot in one click using the <strong>1-Click Capture Bookmarklet</strong> on the job posting tab—it will automatically upgrade this row in-place without creating a duplicate.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 pl-7 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsBookmarkletOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Bookmark className="w-3.5 h-3.5" />
+                      Set up 1-Click Capture
+                    </button>
+                    {job.url && (
+                      <a
+                        href={job.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-amber-900 hover:text-amber-950 underline underline-offset-2 ml-1"
+                      >
+                        Open job posting
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Key Metrics Strip */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
@@ -532,6 +574,7 @@ export const JobDetailModal = ({
               </div>
             </div>
           </motion.div>
+          <BookmarkletModal isOpen={isBookmarkletOpen} onClose={() => setIsBookmarkletOpen(false)} />
         </div>
       )}
     </AnimatePresence>

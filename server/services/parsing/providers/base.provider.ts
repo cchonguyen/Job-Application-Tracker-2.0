@@ -1,5 +1,9 @@
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
 
+export interface AtsProviderOptions {
+  checkAiQuota?: () => Promise<boolean>;
+}
+
 export interface AtsProviderResult {
   extractedData: ExtractedJobAttributes;
   tierUsed: string;
@@ -7,10 +11,13 @@ export interface AtsProviderResult {
 
 export interface AtsProvider {
   readonly name: string;
-  canHandle(url: string, atsInfo?: { type: string | null; board?: string; jobId?: string }): boolean;
+  canHandle(url: string, atsInfo?: any): boolean;
   extract(
     url: string,
-    atsInfo: { type: string | null; board?: string; jobId?: string },
-    diagnosticSteps: DiagnosticStep[]
+    atsInfo: any,
+    diagnosticSteps: DiagnosticStep[],
+    options?: AtsProviderOptions
   ): Promise<AtsProviderResult>;
 }
+
+

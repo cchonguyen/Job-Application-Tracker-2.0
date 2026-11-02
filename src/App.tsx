@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { HeaderActionPanel } from './components/HeaderActionPanel';
 import { AnalyticsBar } from './components/AnalyticsBar';
 import { JobSpreadsheet } from './components/JobSpreadsheet';
@@ -46,6 +46,60 @@ export default function App() {
   const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
   const [isAtsDebuggerOpen, setIsAtsDebuggerOpen] = useState(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
+
+  // Cross-tab synchronization via BroadcastChannel & localStorage
+  useEffect(() => {
+    const handleSync = (payload: { type?: string; job?: JobRecord }) => {
+      if (!payload?.job?.id) return;
+      const job = payload.job;
+      setJobs((prev) => {
+        const index = prev.findIndex((j) => j.id === job.id);
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = job;
+          return next;
+        }
+        return [job, ...prev];
+      });
+      setSelectedJob((prev) => (prev && prev.id === job.id ? job : prev));
+      if (payload.type === 'job-upgraded') {
+        showToast(`Job ${job.company} upgraded via 1-Click Capture!`, 'success');
+      } else if (payload.type === 'job-saved') {
+        showToast(`Job ${job.company} captured and added to tracker!`, 'success');
+      }
+    };
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel('jat-jobs-sync');
+        channel.onmessage = (event) => {
+          handleSync(event.data);
+        };
+      }
+    } catch (err) {
+      console.warn('BroadcastChannel error:', err);
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'jat-sync-event' && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue);
+          handleSync(data);
+        } catch (err) {
+          console.warn('Failed parsing jat-sync-event:', err);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      if (channel) {
+        channel.close();
+      }
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [setJobs]);
 
   // Google Sheets Synchronization Hook
   const sheetsSync = useGoogleSheetsSync(jobs);

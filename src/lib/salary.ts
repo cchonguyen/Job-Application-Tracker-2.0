@@ -198,11 +198,6 @@ export function extractSalaryFromTextOrJson(
   }
 
   if (!text) {
-    const bench = getBenchmarkSalary(company, jobTitle);
-    if (bench) {
-      const parsed = parseSalaryRange(bench);
-      return { salary: parsed.formatted, salaryMin: parsed.salaryMin, salaryMax: parsed.salaryMax };
-    }
     return { salary: 'Not listed', salaryMin: null, salaryMax: null };
   }
 
@@ -248,12 +243,6 @@ export function extractSalaryFromTextOrJson(
     if (parsed.isReal) {
       return { salary: parsed.formatted, salaryMin: parsed.salaryMin, salaryMax: parsed.salaryMax };
     }
-  }
-
-  const bench = getBenchmarkSalary(company, jobTitle);
-  if (bench) {
-    const parsed = parseSalaryRange(bench);
-    return { salary: parsed.formatted, salaryMin: parsed.salaryMin, salaryMax: parsed.salaryMax };
   }
 
   return { salary: 'Not listed', salaryMin: null, salaryMax: null };

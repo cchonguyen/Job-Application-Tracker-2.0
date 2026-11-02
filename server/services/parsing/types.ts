@@ -50,4 +50,10 @@ export interface ScrapedHtmlData {
   jsonLd?: any;
   cleanedText?: string;
   rawHtmlStatus: number;
+  detectedAts?: {
+    type: string;
+    board?: string;
+    jobId?: string;
+  };
+  spaState?: any;
 }

@@ -1,9 +1,13 @@
+import * as cheerio from 'cheerio';
 import { deriveCompanyFromTitle, slugToCompanyName } from '../../../../src/lib/companyName.ts';
-import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
+import { extractSalaryFromTextOrJson, formatIntegerToK } from '../../../../src/lib/salary.ts';
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
-import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { AtsProvider, AtsProviderOptions, AtsProviderResult } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
+import { fetchPublicUrl, readResponseTextUpTo } from '../utils/safeFetch.ts';
+import { cleanHtmlDescription, decodeHtmlEntities } from '../utils/schemaOrgNormalizer.ts';
+import { tryFastPathNormalize } from '../utils/fastPathNormalizer.ts';
 
 interface WorkablePosting {
   title?: string;
@@ -14,6 +18,7 @@ interface WorkablePosting {
   postedOn?: string;
   content: string;
   sourceUrl: string;
+  isApiV3?: boolean;
 }
 
 export class WorkableProvider implements AtsProvider {
@@ -58,10 +63,94 @@ export class WorkableProvider implements AtsProvider {
       postedOn,
       content: markdown,
       sourceUrl,
+      isApiV3: false,
+    };
+  }
+
+  private parseV3Json(data: any, board: string, sourceUrl: string): WorkablePosting {
+    const title = decodeHtmlEntities(data.title || '').trim();
+    const company =
+      (data.company && typeof data.company === 'object' ? data.company.name : data.company) ||
+      slugToCompanyName(board);
+
+    let location = '';
+    if (data.location) {
+      if (typeof data.location === 'string') {
+        location = decodeHtmlEntities(data.location).trim();
+      } else if (typeof data.location === 'object') {
+        const parts = [data.location.city, data.location.region, data.location.country]
+          .filter(Boolean)
+          .map((s) => decodeHtmlEntities(String(s)).trim());
+        location = parts.join(', ');
+        if (data.location.telecommuting) {
+          location = location ? `Remote (${location})` : 'Remote';
+        }
+      }
+    }
+
+    const workplace = data.workplace || (data.telecommuting ? 'Remote' : undefined);
+    const department = Array.isArray(data.department)
+      ? data.department.join(', ')
+      : data.department || (data.category ? String(data.category) : undefined);
+    const postedOn = data.published || data.created_at;
+
+    let salaryStr = '';
+    if (data.salary) {
+      const s = data.salary;
+      const cur = s.currency ? `${s.currency} ` : '';
+      const interval = s.interval ? ` / ${s.interval}` : '';
+      if (s.min && s.max) {
+        salaryStr = `${cur}${s.min} - ${s.max}${interval}`;
+      } else if (s.min || s.max) {
+        salaryStr = `${cur}${s.min || s.max}${interval}`;
+      }
+    }
+
+    const descClean = cleanHtmlDescription(data.description || '');
+    const reqClean = data.requirements ? `\n\nRequirements:\n${cleanHtmlDescription(data.requirements)}` : '';
+    const benClean = data.benefits ? `\n\nBenefits:\n${cleanHtmlDescription(data.benefits)}` : '';
+
+    const content = `# ${title}\n> ${company} · ${location || 'Not listed'}\n\n${
+      salaryStr ? '**Salary:** ' + salaryStr + '\n\n' : ''
+    }${descClean}${reqClean}${benClean}`;
+
+    return {
+      title,
+      company,
+      location,
+      workplace,
+      department,
+      postedOn,
+      content,
+      sourceUrl,
+      isApiV3: true,
     };
   }
 
   private async fetchApi(board: string, jobId: string): Promise<WorkablePosting> {
+    // 1. Try Workable API v3 structured JSON endpoint first
+    try {
+      const v3Url = `https://apply.workable.com/api/v3/accounts/${encodeURIComponent(board)}/jobs/${encodeURIComponent(jobId)}`;
+      const v3Response = await fetchPublicUrl(v3Url, {
+        signal: AbortSignal.timeout(6000),
+        headers: {
+          Accept: 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+      });
+
+      if (v3Response.ok) {
+        const data = await v3Response.json();
+        if (data && (data.title || data.id || data.shortcode)) {
+          return this.parseV3Json(data, board, v3Url);
+        }
+      }
+    } catch {
+      // Fall through to markdown endpoints on failure
+    }
+
+    // 2. Fall back to server-rendered .md endpoints
     const candidateUrls = [
       `https://apply.workable.com/${encodeURIComponent(board)}/jobs/view/${encodeURIComponent(jobId)}.md`,
       `https://apply.workable.com/${encodeURIComponent(board)}/j/${encodeURIComponent(jobId)}.md`,
@@ -70,7 +159,7 @@ export class WorkableProvider implements AtsProvider {
 
     for (const apiUrl of candidateUrls) {
       try {
-        const response = await fetch(apiUrl, {
+        const response = await fetchPublicUrl(apiUrl, {
           signal: AbortSignal.timeout(6000),
           headers: {
             Accept: 'text/markdown, text/plain, */*',
@@ -79,7 +168,7 @@ export class WorkableProvider implements AtsProvider {
           },
         });
         if (response.ok) {
-          const markdown = await response.text();
+          const markdown = await readResponseTextUpTo(response, 2 * 1024 * 1024);
           if (markdown && markdown.trim().length > 40) {
             return this.parseMarkdown(markdown, apiUrl);
           }
@@ -91,21 +180,22 @@ export class WorkableProvider implements AtsProvider {
       }
     }
 
-    throw new Error(lastError?.message || `Workable markdown not found for ${board}/${jobId}`);
+    throw new Error(lastError?.message || `Workable posting not found for ${board}/${jobId}`);
   }
 
   async extract(
     url: string,
     atsInfo: { type: string; board?: string; jobId?: string },
-    diagnosticSteps: DiagnosticStep[]
+    diagnosticSteps: DiagnosticStep[],
+    options?: AtsProviderOptions
   ): Promise<AtsProviderResult> {
     const board = atsInfo.board!;
     const jobId = atsInfo.jobId!;
     const start = Date.now();
 
     diagnosticSteps.push({
-      tier: 'Tier 1 (Workable Markdown)',
-      name: 'Tier 1: Workable Public Markdown Endpoint',
+      tier: 'Tier 1 (Workable API / Markdown)',
+      name: 'Tier 1: Workable Public Posting',
       status: 'pending',
     });
 
@@ -117,7 +207,78 @@ export class WorkableProvider implements AtsProvider {
 
     diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
     diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - start;
-    diagnosticSteps[diagnosticSteps.length - 1].details = `Fetched server-rendered markdown for ${companyHint || board}`;
+    diagnosticSteps[diagnosticSteps.length - 1].details = posting.isApiV3
+      ? `Fetched structured JSON from Workable API v3 for ${companyHint || board}`
+      : `Fetched server-rendered markdown for ${companyHint || board}`;
+
+    // Fast-Path Normalizer (Tier 1.5)
+    const fastPath = tryFastPathNormalize({
+      company: companyHint,
+      jobTitle: posting.title,
+      location: posting.location || (posting.workplace ? `${posting.workplace}` : undefined),
+      descriptionText: posting.content,
+      department: posting.department,
+      employmentType: posting.workplace,
+      rawPayload: posting.content,
+    });
+
+    if (fastPath) {
+      diagnosticSteps.push({
+        tier: 'Tier 1.5 (Fast-Path Normalizer)',
+        name: 'Strict Fast-Path Normalizer',
+        status: 'success',
+        details: 'Structured ATS data satisfied high-confidence threshold. Extracted deterministically with 0 AI quota consumed.',
+      });
+      return {
+        extractedData: fastPath,
+        tierUsed: 'ATS API (Workable • Fast-Path)',
+      };
+    }
+
+    if (options?.checkAiQuota && !(await options.checkAiQuota())) {
+      diagnosticSteps.push({
+        tier: 'Tier 3 (AI Quota Check)',
+        name: 'Daily AI Extraction Quota Limit',
+        status: 'skipped',
+        details: 'Daily AI extraction quota reached. Skipping Gemini normalization.',
+      });
+      const parsedSalary = extractSalaryFromTextOrJson(posting.content);
+      const fallbackTitle = posting.title || 'Software & Product Specialist';
+      const fallbackCompany = companyHint || 'Company';
+      const isSr = /\b(sr|senior|lead|principal|director|head|staff|vp)\b/i.test(fallbackTitle);
+      const cleanSummary = posting.content
+        .replace(/^#.*$/gm, '')
+        .replace(/^>.*$/gm, '')
+        .replace(/^\s*\*\*(?:Workplace|Department|Salary|Location|Posted)\s*:\*\*.*$/gim, '')
+        .replace(/[*#>_`]/g, ' ')
+        .replace(/[•●]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 450);
+
+      const fallbackData: ExtractedJobAttributes = {
+        company: fallbackCompany,
+        jobTitle: fallbackTitle,
+        location: posting.location || (posting.workplace ? `${posting.workplace}` : 'Remote (US)'),
+        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (Refer to job post)',
+        salaryMin: parsedSalary.salaryMin,
+        salaryMax: parsedSalary.salaryMax,
+        industry: 'Unknown',
+        summary: cleanSummary || `${fallbackCompany} is hiring for the role of ${fallbackTitle}.`,
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
+        positionMetadata: {
+          seniority: isSr ? 'Senior' : 'Mid-level',
+          department: posting.department || 'Unknown',
+          employmentType: 'Unknown',
+          requiredSkills: [],
+        },
+      };
+
+      return {
+        extractedData: fallbackData,
+        tierUsed: posting.isApiV3 ? 'Direct ATS API (Workable v3)' : 'Workable Markdown (Deterministic)',
+      };
+    }
 
     const geminiStart = Date.now();
     diagnosticSteps.push({
@@ -141,11 +302,11 @@ export class WorkableProvider implements AtsProvider {
 
       return {
         extractedData: structured,
-        tierUsed: 'Workable Markdown + Gemini 3.8',
+        tierUsed: posting.isApiV3 ? 'ATS API (Workable v3)' : 'Workable Markdown + Gemini 3.8',
       };
     } catch (geminiErr: any) {
       diagnosticSteps[diagnosticSteps.length - 1].status = 'failed';
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini call failed (${geminiErr.message}). Using parsed Workable markdown fields.`;
+      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini call failed (${geminiErr.message}). Using parsed Workable ${posting.isApiV3 ? 'API v3' : 'markdown'} fields.`;
 
       const parsedSalary = extractSalaryFromTextOrJson(posting.content);
       const fallbackTitle = posting.title || 'Software & Product Specialist';
@@ -181,7 +342,7 @@ export class WorkableProvider implements AtsProvider {
 
       return {
         extractedData: fallbackData,
-        tierUsed: 'Workable Markdown (Deterministic)',
+        tierUsed: posting.isApiV3 ? 'Direct ATS API (Workable v3)' : 'Workable Markdown (Deterministic)',
       };
     }
   }

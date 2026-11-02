@@ -6,9 +6,27 @@ import { JobRecord } from '../types';
 
 type CaptureState =
   | { kind: 'saving' }
-  | { kind: 'saved'; job: JobRecord }
+  | { kind: 'saved'; job: JobRecord; upgraded?: boolean }
   | { kind: 'duplicate'; candidate: JobRecord; existing: string }
   | { kind: 'error'; message: string };
+
+function broadcastJobSync(type: 'job-saved' | 'job-upgraded', job: JobRecord) {
+  const payload = { type, job, timestamp: Date.now() };
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('jat-jobs-sync');
+      channel.postMessage(payload);
+      channel.close();
+    }
+  } catch (err) {
+    console.warn('BroadcastChannel error:', err);
+  }
+  try {
+    localStorage.setItem('jat-sync-event', JSON.stringify(payload));
+  } catch (err) {
+    console.warn('localStorage sync error:', err);
+  }
+}
 
 async function postJson(body: unknown) {
   const res = await apiFetch('/api/extract-job', {
@@ -42,7 +60,9 @@ export const CapturePage = () => {
           existing: first ? `${first.existingJob.company} – ${first.existingJob.jobTitle} (${first.timeAgoLabel})` : '',
         });
       } else {
-        setState({ kind: 'saved', job: data.job });
+        const isUpgraded = Boolean(data.upgradedExistingStub);
+        broadcastJobSync(isUpgraded ? 'job-upgraded' : 'job-saved', data.job);
+        setState({ kind: 'saved', job: data.job, upgraded: isUpgraded });
       }
     } catch (err: any) {
       setState({ kind: 'error', message: err.message || 'Could not save this job.' });
@@ -53,7 +73,8 @@ export const CapturePage = () => {
     setState({ kind: 'saving' });
     try {
       const data = await postJson({ candidateJob: candidate, confirmDuplicate: true });
-      setState({ kind: 'saved', job: data.job });
+      broadcastJobSync('job-saved', data.job);
+      setState({ kind: 'saved', job: data.job, upgraded: false });
     } catch (err: any) {
       setState({ kind: 'error', message: err.message || 'Could not save this job.' });
     }
@@ -97,10 +118,17 @@ export const CapturePage = () => {
             <div className="flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-slate-900">Saved</div>
+                <div className="font-semibold text-slate-900">
+                  {state.upgraded ? 'Snapshot upgraded' : 'Saved'}
+                </div>
                 <div className="text-slate-600">
                   {state.job.company} – {state.job.jobTitle}
                 </div>
+                {state.upgraded && (
+                  <div className="text-xs text-emerald-700 mt-1">
+                    Upgraded existing stub in-place with full posting details.
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-2">
