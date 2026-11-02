@@ -6,7 +6,7 @@ import type { AddressInfo } from 'net';
 import { Hono } from 'hono';
 import { getRequestListener } from '@hono/node-server';
 import type { AppEnv } from '../../app.types.ts';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A title the parser would split into "Senior Software Engineer" + team "Platform".
 // If anything re-parses on read, this stored record gets rewritten.
@@ -32,6 +32,7 @@ let originalCwd: string;
 let dataFile: string;
 let server: http.Server;
 let baseUrl: string;
+let parsingEngine: any;
 
 beforeAll(async () => {
   originalCwd = process.cwd();
@@ -41,6 +42,8 @@ beforeAll(async () => {
   // The JSON store resolves its data file from cwd at import time.
   process.chdir(tmpDir);
 
+  const { parsingEngine: engine } = await import('../../services/parsing/index.ts');
+  parsingEngine = engine;
   const { jobsRouter } = await import('../jobs.routes.ts');
   const { extractRouter } = await import('../extract.routes.ts');
   const { LOCAL_DEV_USER_ID } = await import('../../../src/lib/jobsStore.ts');
@@ -214,5 +217,179 @@ describe('isolation between users', () => {
     const saved = readStored().find((j: any) => j.id === body.job.id);
     expect(saved.userId).toBe('user-b');
     expect(readStored().find((j: any) => j.id === storedJob.id).userId).toBeUndefined();
+  });
+});
+
+describe('POST /api/extract-job (In-Place Stub Upgrade & Canonical URL)', () => {
+  const readStored = () => JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
+
+  it('upgrades an incomplete "Needs review" stub row in-place when complete extraction succeeds', async () => {
+    // Setup existing incomplete stub
+    const stubJob = {
+      id: 'job_stub_123',
+      company: 'Acme',
+      jobTitle: 'Unknown Role',
+      location: 'Not listed',
+      salary: 'Not listed',
+      status: 'Interviewing',
+      dateApplied: '2026-10-15',
+      dateAdded: '2026-10-15',
+      industry: 'Unknown',
+      summary: '',
+      url: 'https://boards.greenhouse.io/acme/jobs/12345?gh_src=some_campaign',
+      companyMetadata: {},
+      positionMetadata: { requiredSkills: [] },
+      extractedVia: 'Deterministic URL Parser (Free Tier Safety)',
+      createdAt: '2026-10-15T10:00:00.000Z',
+      notes: 'User custom notes preserved',
+      statusHistory: [{ at: '2026-10-15T10:00:00.000Z', from: null, to: 'Interviewing' }],
+    };
+    fs.writeFileSync(dataFile, JSON.stringify([stubJob], null, 2));
+
+    const extractSpy = vi.spyOn(parsingEngine, 'extract').mockResolvedValueOnce({
+      extractedData: {
+        company: 'Acme Corporation',
+        jobTitle: 'Staff Backend Engineer',
+        team: 'Infrastructure',
+        location: 'San Francisco, CA',
+        salary: '$190,000 - $220,000 / yr',
+        salaryMin: 190000,
+        salaryMax: 220000,
+        industry: 'Enterprise Software',
+        summary: 'Full role overview successfully extracted via 1-Click Bookmarklet.',
+        positionMetadata: {
+          seniority: 'Staff',
+          department: 'Engineering',
+          employmentType: 'Full-time',
+          requiredSkills: ['Go', 'Kafka'],
+        },
+        companyMetadata: {
+          headcount: '1,000+ employees',
+          headquarters: 'San Francisco, CA',
+          ownership: 'Public',
+        },
+      },
+      tierUsed: 'ATS API (Greenhouse • Fast-Path)',
+      diagnosticSteps: [{ tier: 'Tier 1', name: 'Greenhouse API', status: 'success' }],
+    } as any);
+
+    const res = await fetch(`${baseUrl}/api/extract-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://boards.greenhouse.io/acme/jobs/12345/apply',
+        manualText: 'Rendered DOM text from bookmarklet',
+      }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.upgradedExistingStub).toBe(true);
+    expect(body.potentialDuplicate).toBeFalsy();
+
+    // Verify user-owned fields preserved
+    expect(body.job.id).toBe(stubJob.id);
+    expect(body.job.status).toBe('Interviewing');
+    expect(body.job.dateApplied).toBe('2026-10-15');
+    expect(body.job.dateAdded).toBe('2026-10-15');
+    expect(body.job.notes).toBe('User custom notes preserved');
+    expect(body.job.statusHistory).toEqual(stubJob.statusHistory);
+
+    // Verify extracted fields upgraded
+    expect(body.job.company).toBe('Acme Corporation');
+    expect(body.job.jobTitle).toBe('Staff Backend Engineer');
+    expect(body.job.team).toBe('Infrastructure');
+    expect(body.job.salary).toBe('190k - 220k');
+    expect(body.job.extractedVia).toBe('ATS API (Greenhouse • Fast-Path)');
+    // Canonical URL stored without /apply
+    expect(body.job.url).toBe('https://boards.greenhouse.io/acme/jobs/12345');
+
+    // Verify database only has 1 record (no duplicate created)
+    const stored = readStored();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].id).toBe(stubJob.id);
+    expect(stored[0].company).toBe('Acme Corporation');
+    expect(stored[0].notes).toBe('User custom notes preserved');
+
+    extractSpy.mockRestore();
+  });
+
+  it('does NOT upgrade complete snapshots and instead triggers duplicate warning', async () => {
+    const completeJob = {
+      id: 'job_complete_1',
+      company: 'Acme',
+      jobTitle: 'Senior Software Engineer',
+      location: 'Remote',
+      salary: '$150,000 - $170,000 / yr',
+      status: 'Applied',
+      dateApplied: '2026-10-01',
+      dateAdded: '2026-10-01',
+      industry: 'Software',
+      summary: 'Complete snapshot already stored.',
+      url: 'https://boards.greenhouse.io/acme/jobs/12345',
+      companyMetadata: {},
+      positionMetadata: { requiredSkills: [] },
+      extractedVia: 'Gemini 3.8 Flash',
+      createdAt: '2026-10-01T12:00:00.000Z',
+      notes: '',
+      statusHistory: [],
+    };
+    fs.writeFileSync(dataFile, JSON.stringify([completeJob], null, 2));
+
+    const extractSpy = vi.spyOn(parsingEngine, 'extract').mockResolvedValueOnce({
+      extractedData: {
+        company: 'Acme',
+        jobTitle: 'Senior Software Engineer',
+        location: 'Remote',
+        salary: '$150,000 - $170,000 / yr',
+      },
+      tierUsed: 'Gemini 3.8 Flash',
+      diagnosticSteps: [],
+    } as any);
+
+    const res = await fetch(`${baseUrl}/api/extract-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://boards.greenhouse.io/acme/jobs/12345',
+      }),
+    });
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.potentialDuplicate).toBe(true);
+    expect(body.upgradedExistingStub).toBeFalsy();
+    expect(body.duplicates).toHaveLength(1);
+
+    // Stored jobs still unchanged
+    expect(readStored()).toHaveLength(1);
+    expect(readStored()[0].id).toBe(completeJob.id);
+
+    extractSpy.mockRestore();
+  });
+
+  it('runs canonicalization on POST /api/test-ats-diagnostic', async () => {
+    const extractSpy = vi.spyOn(parsingEngine, 'extract').mockResolvedValueOnce({
+      extractedData: { company: 'TestCo', jobTitle: 'Test Role' },
+      tierUsed: 'ATS API (Greenhouse)',
+      diagnosticSteps: [],
+    } as any);
+
+    const res = await fetch(`${baseUrl}/api/test-ats-diagnostic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://boards.greenhouse.io/testco/jobs/999/apply?gh_src=test_campaign',
+      }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    // targetUrl in report was canonicalized
+    expect(body.report.targetUrl).toBe('https://boards.greenhouse.io/testco/jobs/999');
+
+    extractSpy.mockRestore();
   });
 });

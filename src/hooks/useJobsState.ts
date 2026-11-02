@@ -67,6 +67,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
       const data = await safeFetchJson<{
         success: boolean;
         job?: JobRecord;
+        upgradedExistingStub?: boolean;
         tierUsed?: string;
         potentialDuplicate?: boolean;
         candidateJob?: JobRecord;
@@ -91,12 +92,21 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
       }
 
       if (data.success && data.job) {
-        setJobs((prev) => [data.job!, ...prev]);
-        setPendingDuplicate(null);
-        showToast(
-          `Extracted ${data.job.company} (${data.job.jobTitle}) via ${data.tierUsed}! Added to spreadsheet.`,
-          'success'
-        );
+        if (data.upgradedExistingStub) {
+          setJobs((prev) => prev.map((j) => (j.id === data.job!.id ? data.job! : j)));
+          setPendingDuplicate(null);
+          showToast(
+            `Upgraded ${data.job.company} (${data.job.jobTitle}) in-place via ${data.tierUsed}!`,
+            'success'
+          );
+        } else {
+          setJobs((prev) => [data.job!, ...prev]);
+          setPendingDuplicate(null);
+          showToast(
+            `Extracted ${data.job.company} (${data.job.jobTitle}) via ${data.tierUsed}! Added to spreadsheet.`,
+            'success'
+          );
+        }
       } else {
         throw new Error(data.error || 'Failed to extract job');
       }
