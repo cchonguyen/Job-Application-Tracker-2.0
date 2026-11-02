@@ -2,10 +2,15 @@ import { detectAts } from '../../../src/lib/atsDetect.ts';
 import { extractWithGemini, extractWithUrlContext } from './ai/geminiExtractor.ts';
 import { cleanErrorMessage } from './geminiClient.ts';
 import { AshbyProvider } from './providers/ashby.provider.ts';
+import { BambooHrProvider } from './providers/bamboohr.provider.ts';
 import { AtsProvider } from './providers/base.provider.ts';
 import { GreenhouseProvider } from './providers/greenhouse.provider.ts';
 import { LeverProvider } from './providers/lever.provider.ts';
+import { PinpointProvider } from './providers/pinpoint.provider.ts';
+import { RecruiteeProvider } from './providers/recruitee.provider.ts';
+import { SmartRecruitersProvider } from './providers/smartrecruiters.provider.ts';
 import { WorkableProvider } from './providers/workable.provider.ts';
+import { WorkdayProvider } from './providers/workday.provider.ts';
 import { DiagnosticStep, ExtractionResult, ScrapedHtmlData } from './types.ts';
 import {
   cleanCompanyName,
@@ -20,6 +25,11 @@ export class JobParsingEngine {
     new LeverProvider(),
     new WorkableProvider(),
     new AshbyProvider(),
+    new SmartRecruitersProvider(),
+    new RecruiteeProvider(),
+    new PinpointProvider(),
+    new BambooHrProvider(),
+    new WorkdayProvider(),
   ];
 
   /**
@@ -106,7 +116,8 @@ export class JobParsingEngine {
           tier: 'Tier 1 (ATS REST API)',
           name: 'ATS Signature Detector',
           status: 'skipped',
-          details: 'URL does not match a known Greenhouse, Lever, Workable, or Ashby API pattern. Proceeding to Tier 2.',
+          details:
+            'URL does not match a supported Tier 1 ATS API pattern (Greenhouse, Lever, Workable, Ashby, SmartRecruiters, Recruitee, Pinpoint, BambooHR, Workday). Proceeding to Tier 2.',
         });
       }
     }

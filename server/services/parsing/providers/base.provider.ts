@@ -7,10 +7,12 @@ export interface AtsProviderResult {
 
 export interface AtsProvider {
   readonly name: string;
-  canHandle(url: string, atsInfo?: { type: string | null; board?: string; jobId?: string }): boolean;
+  canHandle(url: string, atsInfo?: any): boolean;
   extract(
     url: string,
-    atsInfo: { type: string | null; board?: string; jobId?: string },
+    atsInfo: any,
     diagnosticSteps: DiagnosticStep[]
   ): Promise<AtsProviderResult>;
 }
+
+
