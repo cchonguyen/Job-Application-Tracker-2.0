@@ -4,7 +4,7 @@ import { parsingEngine } from '../services/parsing/index.ts';
 import { parseUrlDeterministically } from '../services/parsing/utils/htmlCleaner.ts';
 import { jobRepository, newJobId } from '../services/storage/index.ts';
 import { scopeOf } from '../middleware/requireUser.ts';
-import { companyLookupLimit, extractionLimit } from '../middleware/extractionLimit.ts';
+import { companyLookupLimit, extractionLimit, takeDailyUsage } from '../middleware/extractionLimit.ts';
 import { detectAts } from '../../src/lib/atsDetect.ts';
 import { initialDateAppliedForStatus } from '../../src/lib/jobDates.ts';
 import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
@@ -16,7 +16,7 @@ import { readJsonBody } from './readJsonBody.ts';
 export const extractRouter = new Hono<AppEnv>();
 
 // POST /api/extract-job: Ingest URL or manual text, run pipeline, and append to spreadsheet
-extractRouter.post('/extract-job', extractionLimit, async (c) => {
+extractRouter.post('/extract-job', async (c) => {
   const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = await readJsonBody(c);
   const scope = scopeOf(c);
 
@@ -42,7 +42,9 @@ extractRouter.post('/extract-job', extractionLimit, async (c) => {
   let extractedData: any = null;
 
   try {
-    const result = await parsingEngine.extract(url, manualText);
+    const result = await parsingEngine.extract(url, manualText, {
+      checkAiQuota: () => takeDailyUsage(scope, 'extraction'),
+    });
     extractedData = result.extractedData;
     tierUsed = result.tierUsed;
     diagnosticSteps = result.diagnosticSteps;
@@ -155,15 +157,18 @@ extractRouter.get('/company-facts', companyLookupLimit, async (c) => {
 });
 
 // POST /api/test-ats-diagnostic: Run ATS diagnostic on a test URL without saving
-extractRouter.post('/test-ats-diagnostic', extractionLimit, async (c) => {
+extractRouter.post('/test-ats-diagnostic', async (c) => {
   const { url } = await readJsonBody(c);
   if (!url) {
     return c.json({ success: false, error: 'URL is required' }, 400);
   }
 
   try {
+    const scope = scopeOf(c);
     const ats = detectAts(url);
-    const { extractedData, tierUsed, diagnosticSteps } = await parsingEngine.extract(url);
+    const { extractedData, tierUsed, diagnosticSteps } = await parsingEngine.extract(url, undefined, {
+      checkAiQuota: () => takeDailyUsage(scope, 'extraction'),
+    });
 
     return c.json({
       success: true,

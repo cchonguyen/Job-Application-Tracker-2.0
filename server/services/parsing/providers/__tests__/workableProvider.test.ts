@@ -69,7 +69,7 @@ describe('WorkableProvider', () => {
       steps
     );
 
-    expect(result.tierUsed).toBe('ATS API (Workable v3)');
+    expect(result.tierUsed).toBe('ATS API (Workable • Fast-Path)');
     expect(steps[0].status).toBe('success');
     expect(steps[0].details).toContain('Workable API v3');
   });
@@ -82,7 +82,7 @@ describe('WorkableProvider', () => {
 **Workplace:** Hybrid
 **Department:** Cloud Engineering
 
-We are seeking a Staff DevOps Architect to scale our multi-region Kubernetes clusters.
+Short description.
     `;
 
     vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {

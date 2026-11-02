@@ -2,10 +2,11 @@ import { slugToCompanyName } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson, formatIntegerToK } from '../../../../src/lib/salary.ts';
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
-import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { AtsProvider, AtsProviderOptions, AtsProviderResult } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { fetchPublicUrl } from '../utils/safeFetch.ts';
 import { cleanHtmlDescription } from '../utils/schemaOrgNormalizer.ts';
+import { tryFastPathNormalize } from '../utils/fastPathNormalizer.ts';
 
 export interface SmartRecruitersPosting {
   id?: string;
@@ -107,7 +108,8 @@ export class SmartRecruitersProvider implements AtsProvider {
   async extract(
     url: string,
     atsInfo: { type: string | null; board?: string; jobId?: string },
-    diagnosticSteps: DiagnosticStep[]
+    diagnosticSteps: DiagnosticStep[],
+    options?: AtsProviderOptions
   ): Promise<AtsProviderResult> {
     const board = atsInfo.board!;
     const jobId = atsInfo.jobId!;
@@ -127,6 +129,90 @@ export class SmartRecruitersProvider implements AtsProvider {
     diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - start;
     diagnosticSteps[diagnosticSteps.length - 1].details =
       'Successfully fetched structured JSON from SMARTRECRUITERS API endpoint';
+
+    // Fast-Path Normalizer (Tier 1.5)
+    const sections = atsPayload.jobAd?.sections || {};
+    const fullText = [
+      sections.jobDescription?.text,
+      sections.qualifications?.text,
+      sections.additionalInformation?.text,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const parsedSalary = this.parseSalary(atsPayload, fullText);
+
+    const fastPath = tryFastPathNormalize({
+      company: companyHint,
+      jobTitle: atsPayload.name || titleHint,
+      location: this.formatLocation(atsPayload),
+      descriptionHtml: fullText,
+      department: atsPayload.department?.label,
+      employmentType: atsPayload.typeOfEmployment?.label,
+      salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : undefined,
+      salaryMin: parsedSalary.salaryMin,
+      salaryMax: parsedSalary.salaryMax,
+      rawPayload: atsPayload,
+    });
+
+    if (fastPath) {
+      diagnosticSteps.push({
+        tier: 'Tier 1.5 (Fast-Path Normalizer)',
+        name: 'Strict Fast-Path Normalizer',
+        status: 'success',
+        details: 'Structured ATS data satisfied high-confidence threshold. Extracted deterministically with 0 AI quota consumed.',
+      });
+      return {
+        extractedData: fastPath,
+        tierUsed: 'ATS API (SmartRecruiters • Fast-Path)',
+      };
+    }
+
+    if (options?.checkAiQuota && !(await options.checkAiQuota())) {
+      diagnosticSteps.push({
+        tier: 'Tier 3 (AI Quota Check)',
+        name: 'Daily AI Extraction Quota Limit',
+        status: 'skipped',
+        details: 'Daily AI extraction quota reached. Skipping Gemini normalization.',
+      });
+      const fallbackCompany = companyHint;
+      const fallbackTitle = atsPayload.name || titleHint || 'Job Opening';
+      const fallbackLocation = this.formatLocation(atsPayload);
+
+      let fallbackSummary = '';
+      if (sections.jobDescription?.text) {
+        const cleanDesc = cleanHtmlDescription(sections.jobDescription.text).replace(/\s+/g, ' ').trim();
+        fallbackSummary = cleanDesc.length > 450 ? cleanDesc.slice(0, 450) + '...' : cleanDesc;
+      } else {
+        fallbackSummary = `${fallbackCompany} is recruiting for the role of ${fallbackTitle}. Direct position fetched via the official SmartRecruiters job posting API.`;
+      }
+
+      const isSr =
+        /\b(sr|senior|lead|principal|staff|director|head|vp|manager)\b/i.test(fallbackTitle) ||
+        /senior|lead|director/i.test(atsPayload.experienceLevel?.label || '');
+
+      const fallbackData: ExtractedJobAttributes = {
+        company: fallbackCompany,
+        jobTitle: fallbackTitle,
+        location: fallbackLocation,
+        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
+        salaryMin: parsedSalary.salaryMin,
+        salaryMax: parsedSalary.salaryMax,
+        industry: 'Unknown',
+        summary: fallbackSummary,
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
+        positionMetadata: {
+          seniority: isSr ? 'Senior' : 'Mid-level',
+          department: atsPayload.department?.label || 'Unknown',
+          employmentType: atsPayload.typeOfEmployment?.label || 'Full-time',
+          requiredSkills: [],
+        },
+      };
+
+      return {
+        extractedData: fallbackData,
+        tierUsed: 'Direct ATS API (SmartRecruiters)',
+      };
+    }
 
     const geminiStart = Date.now();
     diagnosticSteps.push({

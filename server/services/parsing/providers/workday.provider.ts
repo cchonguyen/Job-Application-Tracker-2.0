@@ -2,10 +2,11 @@ import { slugToCompanyName } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
 import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
-import { AtsProvider, AtsProviderResult } from './base.provider.ts';
+import { AtsProvider, AtsProviderOptions, AtsProviderResult } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { fetchPublicUrl } from '../utils/safeFetch.ts';
 import { cleanHtmlDescription } from '../utils/schemaOrgNormalizer.ts';
+import { tryFastPathNormalize } from '../utils/fastPathNormalizer.ts';
 
 export interface WorkdayJobPostingInfo {
   title?: string;
@@ -63,7 +64,8 @@ export class WorkdayProvider implements AtsProvider {
   async extract(
     url: string,
     atsInfo: { type: string | null; board?: string; site?: string; jobId?: string; datacenter?: string; [key: string]: any },
-    diagnosticSteps: DiagnosticStep[]
+    diagnosticSteps: DiagnosticStep[],
+    options?: AtsProviderOptions
   ): Promise<AtsProviderResult> {
     const board = atsInfo.board!;
     const site = atsInfo.site!;
@@ -85,6 +87,76 @@ export class WorkdayProvider implements AtsProvider {
     diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - start;
     diagnosticSteps[diagnosticSteps.length - 1].details =
       'Successfully fetched structured JSON from WORKDAY CXS API endpoint';
+
+    // Fast-Path Normalizer (Tier 1.5)
+    const fastPath = tryFastPathNormalize({
+      company: companyHint,
+      jobTitle: info.title || titleHint,
+      location: this.formatLocation(info),
+      descriptionHtml: info.jobDescription,
+      department: info.timeType,
+      employmentType: info.timeType,
+      rawPayload: info,
+    });
+
+    if (fastPath) {
+      diagnosticSteps.push({
+        tier: 'Tier 1.5 (Fast-Path Normalizer)',
+        name: 'Strict Fast-Path Normalizer',
+        status: 'success',
+        details: 'Structured ATS data satisfied high-confidence threshold. Extracted deterministically with 0 AI quota consumed.',
+      });
+      return {
+        extractedData: fastPath,
+        tierUsed: 'ATS API (Workday • Fast-Path)',
+      };
+    }
+
+    if (options?.checkAiQuota && !(await options.checkAiQuota())) {
+      diagnosticSteps.push({
+        tier: 'Tier 3 (AI Quota Check)',
+        name: 'Daily AI Extraction Quota Limit',
+        status: 'skipped',
+        details: 'Daily AI extraction quota reached. Skipping Gemini normalization.',
+      });
+      const fallbackCompany = companyHint;
+      const fallbackTitle = info.title || titleHint || 'Job Opening';
+      const fallbackLocation = this.formatLocation(info);
+      const parsedSalary = extractSalaryFromTextOrJson(info.jobDescription || '');
+
+      let fallbackSummary = '';
+      if (info.jobDescription) {
+        const cleanDesc = cleanHtmlDescription(info.jobDescription).replace(/\s+/g, ' ').trim();
+        fallbackSummary = cleanDesc.length > 450 ? cleanDesc.slice(0, 450) + '...' : cleanDesc;
+      } else {
+        fallbackSummary = `${fallbackCompany} is recruiting for the role of ${fallbackTitle}. Direct position fetched via the official Workday CXS API.`;
+      }
+
+      const isSr = /\b(sr|senior|lead|principal|staff|director|head|vp|manager)\b/i.test(fallbackTitle);
+
+      const fallbackData: ExtractedJobAttributes = {
+        company: fallbackCompany,
+        jobTitle: fallbackTitle,
+        location: fallbackLocation,
+        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
+        salaryMin: parsedSalary.salaryMin,
+        salaryMax: parsedSalary.salaryMax,
+        industry: 'Unknown',
+        summary: fallbackSummary,
+        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
+        positionMetadata: {
+          seniority: isSr ? 'Senior' : 'Mid-level',
+          department: 'Unknown',
+          employmentType: info.timeType || 'Full-time',
+          requiredSkills: [],
+        },
+      };
+
+      return {
+        extractedData: fallbackData,
+        tierUsed: 'Direct ATS API (Workday)',
+      };
+    }
 
     const geminiStart = Date.now();
     diagnosticSteps.push({
