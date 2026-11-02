@@ -392,4 +392,29 @@ describe('POST /api/extract-job (In-Place Stub Upgrade & Canonical URL)', () => 
 
     extractSpy.mockRestore();
   });
+
+  it('returns shortCircuited flag in POST /api/extract-job when WAF short-circuit occurs', async () => {
+    const extractSpy = vi.spyOn(parsingEngine, 'extract').mockResolvedValueOnce({
+      extractedData: { company: 'LinkedInJob', jobTitle: 'Software Engineer', location: 'Sunnyvale, CA' },
+      tierUsed: 'Deterministic URL Parser (Free Tier Safety)',
+      diagnosticSteps: [],
+      shortCircuited: true,
+    } as any);
+
+    const res = await fetch(`${baseUrl}/api/extract-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://www.linkedin.com/jobs/view/999888777',
+      }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.shortCircuited).toBe(true);
+    expect(body.job.extractedVia).toBe('Deterministic URL Parser (Free Tier Safety)');
+
+    extractSpy.mockRestore();
+  });
 });

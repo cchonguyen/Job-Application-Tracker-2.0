@@ -142,6 +142,7 @@ describe('JobParsingEngine (Slice 4)', () => {
       const result = await engine.extract('https://www.linkedin.com/jobs/view/1234567890', undefined, { checkAiQuota });
 
       expect(result.tierUsed).toBe('Deterministic URL Parser (Free Tier Safety)');
+      expect(result.shortCircuited).toBe(true);
       expect(result.extractedData.company).not.toBe('');
 
       // Tier 4 Gemini url_context is skipped!
@@ -171,6 +172,7 @@ describe('JobParsingEngine (Slice 4)', () => {
       const result = await engine.extract('https://protected-portal.com/careers/job-123');
 
       expect(result.tierUsed).toBe('Deterministic URL Parser (Free Tier Safety)');
+      expect(result.shortCircuited).toBe(true);
       expect(vi.mocked(extractWithUrlContext)).not.toHaveBeenCalled();
 
       const wafStep = result.diagnosticSteps.find((s) => s.tier === 'Tier 4 (WAF Short-Circuit)');

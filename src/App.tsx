@@ -15,13 +15,13 @@ import { useTheme } from './hooks/useTheme';
 
 export default function App() {
   const { theme, setMode, setAccent } = useTheme();
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
-    }, 4500);
+    }, 5500);
   };
 
   // Modularized centralized jobs & persistence state hook
@@ -157,13 +157,19 @@ export default function App() {
           className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2.5 text-xs font-medium animate-in slide-in-from-bottom-5 duration-200 ${
             toast.type === 'success'
               ? 'bg-zinc-900 text-white border-zinc-700'
+              : toast.type === 'warning'
+              ? 'bg-amber-950 text-amber-100 border-amber-800'
               : 'bg-rose-900 text-rose-100 border-rose-800'
           }`}
         >
           {toast.type === 'success' ? (
             <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : (
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertTriangle
+              className={`w-4 h-4 shrink-0 ${
+                toast.type === 'warning' ? 'text-amber-400' : 'text-rose-400'
+              }`}
+            />
           )}
           <span>{toast.message}</span>
         </div>

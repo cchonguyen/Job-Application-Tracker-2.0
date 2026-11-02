@@ -44,6 +44,7 @@ extractRouter.post('/extract-job', async (c) => {
   let tierUsed = 'Deterministic Safety Fallback';
   let diagnosticSteps: any[] = [];
   let extractedData: any = null;
+  let shortCircuited = false;
 
   try {
     const result = await parsingEngine.extract(canonicalUrl || rawUrl, manualText, {
@@ -52,6 +53,7 @@ extractRouter.post('/extract-job', async (c) => {
     extractedData = result.extractedData;
     tierUsed = result.tierUsed;
     diagnosticSteps = result.diagnosticSteps;
+    shortCircuited = Boolean(result.shortCircuited);
   } catch (err: any) {
     console.warn('Extraction pipeline warning:', err?.message);
     extractedData = parseUrlDeterministically(canonicalUrl || rawUrl || 'https://company.com/job', null);
@@ -164,6 +166,7 @@ extractRouter.post('/extract-job', async (c) => {
           duplicates,
           tierUsed,
           diagnosticSteps,
+          shortCircuited,
         });
       }
     }
@@ -175,6 +178,7 @@ extractRouter.post('/extract-job', async (c) => {
       job: saved,
       tierUsed,
       diagnosticSteps,
+      shortCircuited,
     });
   } catch (err: any) {
     return c.json({ success: false, error: err.message || 'Failed to save job' }, 500);

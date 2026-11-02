@@ -39,6 +39,7 @@ export interface ExtractionResult {
   extractedData: ExtractedJobAttributes;
   tierUsed: string;
   diagnosticSteps: DiagnosticStep[];
+  shortCircuited?: boolean;
 }
 
 export interface ScrapedHtmlData {

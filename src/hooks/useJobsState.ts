@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { JobRecord, JobStatus, PendingDuplicateCandidate } from '../types';
 import { apiFetch } from '../lib/apiClient';
+import { needsManualReview } from '../lib/formatHelpers';
 
 interface SafeFetchOptions extends RequestInit {}
 
@@ -25,7 +26,7 @@ async function safeFetchJson<T = any>(url: string, options?: SafeFetchOptions): 
   return data as T;
 }
 
-export function useJobsState(showToast: (msg: string, type: 'success' | 'error') => void) {
+export function useJobsState(showToast: (msg: string, type: 'success' | 'error' | 'warning') => void) {
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIngesting, setIsIngesting] = useState(false);
@@ -72,6 +73,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
         potentialDuplicate?: boolean;
         candidateJob?: JobRecord;
         duplicates?: any[];
+        shortCircuited?: boolean;
         error?: string;
       }>('/api/extract-job', {
         method: 'POST',
@@ -84,10 +86,17 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
           candidateJob: data.candidateJob,
           duplicates: data.duplicates,
         });
-        showToast(
-          `Potential duplicate flagged: applied in the past 6 months. Review comparison to proceed.`,
-          'error'
-        );
+        if (data.shortCircuited || needsManualReview(data.candidateJob.extractedVia)) {
+          showToast(
+            `Ingestion did not work properly (bot/login wall blocked reading). Flagged as a potential duplicate from the past 6 months.`,
+            'warning'
+          );
+        } else {
+          showToast(
+            `Potential duplicate flagged: applied in the past 6 months. Review comparison to proceed.`,
+            'error'
+          );
+        }
         return;
       }
 
@@ -98,6 +107,15 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error')
           showToast(
             `Upgraded ${data.job.company} (${data.job.jobTitle}) in-place via ${data.tierUsed}!`,
             'success'
+          );
+        } else if (data.shortCircuited || needsManualReview(data.job.extractedVia)) {
+          setJobs((prev) => [data.job!, ...prev]);
+          setPendingDuplicate(null);
+          const companyLabel =
+            data.job.company && data.job.company !== 'Unknown Company' ? data.job.company : 'Career portal';
+          showToast(
+            `Ingestion did not work properly: ${companyLabel} blocked automated reading. Saved as "Needs review" — use the 1-Click Bookmarklet on the job page to complete it.`,
+            'warning'
           );
         } else {
           setJobs((prev) => [data.job!, ...prev]);

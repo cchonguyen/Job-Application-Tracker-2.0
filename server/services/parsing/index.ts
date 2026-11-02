@@ -354,6 +354,7 @@ ${scraped.cleanedText}
         extractedData: deterministicData,
         tierUsed: 'Deterministic URL Parser (Free Tier Safety)',
         diagnosticSteps,
+        shortCircuited: true,
       };
     }
 
