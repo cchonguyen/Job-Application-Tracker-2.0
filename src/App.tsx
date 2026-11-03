@@ -7,6 +7,7 @@ import { EditJobModal } from './components/EditJobModal';
 import { AtsDiagnosticModal } from './components/AtsDiagnosticModal';
 import { GoogleSheetsSyncModal } from './components/GoogleSheetsSyncModal';
 import { DuplicateWarningModal } from './components/DuplicateWarningModal';
+import { GmailSuggestionsModal } from './components/GmailSuggestionsModal';
 import { useGoogleSheetsSync } from './hooks/useGoogleSheetsSync';
 import { useJobsState } from './hooks/useJobsState';
 import { JobRecord } from './types';
@@ -46,6 +47,7 @@ export default function App() {
   const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
   const [isAtsDebuggerOpen, setIsAtsDebuggerOpen] = useState(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
+  const [isGmailOpen, setIsGmailOpen] = useState(false);
 
   // Cross-tab synchronization via BroadcastChannel & localStorage
   useEffect(() => {
@@ -179,6 +181,7 @@ export default function App() {
       <HeaderActionPanel
         totalJobs={jobs.length}
         onOpenAtsDebugger={() => setIsAtsDebuggerOpen(true)}
+        onOpenGmailSuggestions={() => setIsGmailOpen(true)}
         onIngest={handleIngest}
         isIngesting={isIngesting}
         themeMode={theme.mode}
@@ -259,6 +262,12 @@ export default function App() {
 
       {/* ATS Diagnostic & Test Suite Modal */}
       <AtsDiagnosticModal isOpen={isAtsDebuggerOpen} onClose={() => setIsAtsDebuggerOpen(false)} />
+
+      <GmailSuggestionsModal
+        isOpen={isGmailOpen}
+        onClose={() => setIsGmailOpen(false)}
+        onApply={(id, status) => onStatusChangeWithModalSync(id, status)}
+      />
 
       {/* Google Sheets Sync Modal */}
       <GoogleSheetsSyncModal

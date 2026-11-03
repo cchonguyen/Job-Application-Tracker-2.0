@@ -85,6 +85,14 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Auto-sync (optional) re-syncs shortly after any change to the job list. The chosen sheet and the auto-sync setting are remembered per browser in `localStorage`.
 - For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins** and in the Firebase project's **Authorized domains**.
 
+### 4.7 Gmail status suggestions (`src/lib/emailSignals.ts`, `apps-script/GmailBridge.gs`)
+- A personal feature for the account named in `GMAIL_BRIDGE_OWNER_EMAIL`. Every other account gets `enabled: false` and never sees the owner's mail. Setup steps are in `docs/GMAIL_BRIDGE.md`.
+- The owner deploys `apps-script/GmailBridge.gs` in their own Google account as an Apps Script web app. It only reads mail: when called with the right key it searches recent job emails (ATS senders, or subjects about applications, interviews and offers) and returns up to 200 summaries (ids, date, sender, subject, the first 1,500 characters of plain text, and up to 20 links). The tracker holds no Gmail token.
+- Settings › Gmail suggestions calls `GET /api/email-suggestions`, which asks the bridge for the last 30 days and builds suggestions. Nothing is changed until the user clicks **Apply**, which goes through the normal status update. **Dismiss** hides that email's suggestion in this browser.
+- Classifying uses keyword rules only, so it never uses Gemini quota. Rejection phrases win over everything except job-alert mail, which is ignored. After that, Offer beats Interviewing, which beats an application confirmation (Applied).
+- Matching considers only jobs in Saved, Applied, Interviewing or Offer. Signals are the ATS board slug from the job's link (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) found in the email's links or sender, and the company name in the sender's name, domain or subject, plus title words as a tie-breaker. A clear winner is high confidence. A weaker or close match is shown as "check this".
+- Suggestions only move a job forward (Saved → Applied → Interviewing → Offer), or to Rejected from any open status. They never suggest Accepted or Declined, never create jobs, and never touch the captured job details, so the snapshot and duplicate rules are unaffected.
+
 ---
 
 ## 5. API
@@ -99,6 +107,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 | `POST` | `/api/jobs/import` | Upsert imported jobs by id |
 | `POST` | `/api/jobs/reparse` | Re-normalize stored records |
 | `GET` | `/api/company-facts?company=&url=&title=` | Look up company facts for a job saved without them (read-only) |
+| `GET` | `/api/email-suggestions?days=` | Owner only. Suggested status changes from recent Gmail via the Apps Script bridge (read-only) |
 | `POST` | `/api/test-ats-diagnostic` | Run the pipeline on a URL and report every tier |
 
 ---
@@ -144,6 +153,8 @@ interface JobRecord {
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
 | `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
+| `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` | Optional | The Apps Script web app's `/exec` URL and its key (4.7). Store both as Secrets |
+| `GMAIL_BRIDGE_OWNER_EMAIL` | Optional | The only account allowed to see Gmail suggestions. All three must be set or the feature stays off |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` on Node, and makes the API refuse to run without Supabase. Set in `wrangler.toml` for Cloudflare |
 | `PORT` | Optional | Listen port on Node (default 3000; Render sets it). Unused on Cloudflare |
 | `DISABLE_HMR` | Optional | `true` turns off Vite hot reload and file watching in dev |
