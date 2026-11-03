@@ -24,3 +24,8 @@ run_worker_first = ["/api/*"]
 
 [observability]
 enabled = true
+
+# Preview deploys (Workers Builds on non-production branches) need their own vars block. Keep NODE_ENV production
+# so the preview enforces the same sign-in checks as production (requireUser.ts only enforces when NODE_ENV is production).
+[previews.vars]
+NODE_ENV = "production"
