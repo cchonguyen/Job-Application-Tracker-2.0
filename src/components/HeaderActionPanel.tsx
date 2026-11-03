@@ -20,6 +20,7 @@ import {
   Cpu,
   FileSpreadsheet,
   LogOut,
+  Mail,
 } from 'lucide-react';
 import { JobStatus } from '../types';
 import type { ThemeAccent, ThemeMode } from '../lib/theme';
@@ -37,6 +38,7 @@ import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
 interface HeaderActionPanelProps {
   totalJobs: number;
   onOpenAtsDebugger: () => void;
+  onOpenGmailSuggestions?: () => void;
   onIngest: (params: { url?: string; manualText?: string; status?: JobStatus; notes?: string }) => Promise<void>;
   isIngesting: boolean;
   themeMode: ThemeMode;
@@ -69,6 +71,7 @@ const STATUS_OPTIONS: { value: JobStatus; label: string; icon: React.ComponentTy
 export const HeaderActionPanel = ({
   totalJobs,
   onOpenAtsDebugger,
+  onOpenGmailSuggestions,
   onIngest,
   isIngesting,
   themeMode,
@@ -183,6 +186,20 @@ export const HeaderActionPanel = ({
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Google Sheets Sync</span>
+                  </button>
+                )}
+
+                {onOpenGmailSuggestions && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSettingsMenuOpen(false);
+                      onOpenGmailSuggestions();
+                    }}
+                    className="w-full px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Mail className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Gmail suggestions</span>
                   </button>
                 )}
 

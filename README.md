@@ -9,6 +9,7 @@ Personal job-application tracker that ingests posting URLs (or pasted descriptio
 | [`PRD.md`](PRD.md) | What the app does and the rules it must keep: features, extraction pipeline, API, data model, configuration |
 | This README | Setup, deployment and scripts |
 | [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) | SQL to bring an existing production database up to date |
+| [`docs/GMAIL_BRIDGE.md`](docs/GMAIL_BRIDGE.md) | Connecting your own Gmail for status suggestions |
 | [`AGENTS.md`](AGENTS.md) | How to contribute: docs, schema and versioning rules |
 
 The docs change in the same PR as the code they describe; the **Docs updated** check enforces it.
@@ -61,6 +62,10 @@ Upgrading a database created before v0.6.0? Follow [`docs/MIGRATIONS.md`](docs/M
 ### Google Sheets sync (optional)
 
 Sheets sync runs in the browser with its own Google OAuth client, set in [`firebase-applet-config.json`](firebase-applet-config.json) (`oAuthClientId` plus the Firebase project fields). On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud and to the Firebase project's **Authentication → Settings → Authorized domains**. See PRD 4.6 for how sync behaves.
+
+### Gmail status suggestions (optional, owner only)
+
+Deploy [`apps-script/GmailBridge.gs`](apps-script/GmailBridge.gs) as a web app in your own Google account, then set `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` and `GMAIL_BRIDGE_OWNER_EMAIL` on the Worker. Step-by-step setup is in [`docs/GMAIL_BRIDGE.md`](docs/GMAIL_BRIDGE.md), and PRD 4.7 describes how suggestions are made.
 
 ### Security notes
 
