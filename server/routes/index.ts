@@ -3,6 +3,7 @@ import type { AppEnv } from '../app.types.ts';
 import { jobsRouter } from './jobs.routes.ts';
 import { extractRouter } from './extract.routes.ts';
 import { authConfigRouter } from './authConfig.routes.ts';
+import { emailSuggestionsRouter } from './emailSuggestions.routes.ts';
 import { requireUser } from '../middleware/requireUser.ts';
 
 export const apiRouter = new Hono<AppEnv>();
@@ -13,6 +14,7 @@ apiRouter.route('/auth', authConfigRouter);
 apiRouter.use('*', requireUser);
 
 apiRouter.route('/jobs', jobsRouter);
+apiRouter.route('/email-suggestions', emailSuggestionsRouter);
 apiRouter.route('/', extractRouter);
 
 /**
