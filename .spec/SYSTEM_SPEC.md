@@ -5,11 +5,13 @@
 ## 1. Core Scope & MVP Boundaries
 - One-click ingest of a job posting into an immutable snapshot row, plus status tracking (Saved, Applied, Interviewing, Offer, Accepted, Rejected, Declined).
 - Each account sees only its own jobs (Supabase row-level security).
+- Design system export: `docs/DESIGN_SYSTEM.md` is a Markdown guide a new Claude Code app can follow to reuse this app's visual language and product voice. Status colors live in one place (`src/lib/statusMeta.ts`).
 
 ## 2. Strictly Out of Scope ("Do NOT Build" List)
 - Never overwrite or update a saved job's posting details when the same job is ingested again; add a new row.
 - Never invent posting details; unreadable fields stay `Unknown` / `Not listed`.
 - Never block a duplicate; flag it and let the user choose.
+- Design export: no Style Dictionary or Figma pipeline, no npm package, no machine-readable token file, no new theme engine beyond the light/dark mode and five accents.
 
 ## 3. Data Models & Module Boundaries
 - `src/`: React client. `JobRecord` in `src/types.ts` mirrors `supabase/schema.sql`.
