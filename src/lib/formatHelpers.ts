@@ -1,5 +1,6 @@
 import { JobRecord, JobStatus, PositionMetadata, StatusHistoryEntry } from '../types';
 import { formatSalaryDisplay, parseSalaryRange } from './salary';
+import { STATUS_META } from './statusMeta';
 
 export type WorkArrangementType = 'Remote' | 'Hybrid' | 'Onsite';
 
@@ -221,48 +222,14 @@ export function getCompactTimeline(job: JobRecord): {
  * Returns the 4px semantic left border accent color for a card based on pipeline status.
  */
 export function getStatusBorderAccent(status: JobStatus): string {
-  switch (status) {
-    case 'Saved':
-      return 'border-l-slate-400';
-    case 'Applied':
-      return 'border-l-amber-500';
-    case 'Interviewing':
-      return 'border-l-blue-600';
-    case 'Offer':
-      return 'border-l-purple-600';
-    case 'Accepted':
-      return 'border-l-teal-500';
-    case 'Rejected':
-      return 'border-l-rose-500';
-    case 'Declined':
-      return 'border-l-stone-400';
-    default:
-      return 'border-l-slate-300';
-  }
+  return STATUS_META[status]?.borderAccent ?? 'border-l-slate-300';
 }
 
 /**
  * Returns a solid colored dot background class for status.
  */
 export function getStatusDotColor(status: JobStatus): string {
-  switch (status) {
-    case 'Saved':
-      return 'bg-slate-400';
-    case 'Applied':
-      return 'bg-amber-500';
-    case 'Interviewing':
-      return 'bg-blue-600';
-    case 'Offer':
-      return 'bg-purple-600';
-    case 'Accepted':
-      return 'bg-teal-500';
-    case 'Rejected':
-      return 'bg-rose-500';
-    case 'Declined':
-      return 'bg-stone-500';
-    default:
-      return 'bg-slate-300';
-  }
+  return STATUS_META[status]?.dot ?? 'bg-slate-300';
 }
 
 /**

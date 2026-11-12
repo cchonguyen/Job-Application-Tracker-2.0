@@ -9,12 +9,14 @@ The docs are the source of truth for what the app does and how it is meant to wo
 | `PRD.md` | Product rules, features, extraction pipeline, API routes, data model, configuration |
 | `README.md` | Local setup, Supabase and Google setup, deploy steps, scripts |
 | `docs/MIGRATIONS.md` | SQL and manual steps to bring the production database up to date, newest first |
+| `docs/DESIGN_SYSTEM.md` | Visual language and product voice: color tokens, accents, dark mode, status colors, type, spacing, component patterns, copy rules. Exportable to new apps |
 | `AGENTS.md` | How to work on this repo (this file) |
 | `.spec/` | Harness state: short overview, scope contract, decisions log, and the single-slice progress lock |
 
 When making a change:
 - Find every statement in those files that the change makes untrue, and fix it. A new route, env var, status, field, limit or product rule gets a line in the table or section that lists its kind.
 - Keep the docs describing the code as it is. If you notice drift in a section you are touching, fix it in the same PR.
+- A change to colors, theme tokens, status styling, typography or a shared component pattern updates `docs/DESIGN_SYSTEM.md`. `src/lib/__tests__/designTokens.test.ts` guards the status colors and accent palettes.
 - The **Docs updated** check fails a PR that changes app files (`src/`, `server/`, `supabase/`, `server.ts`, `worker.ts`, `wrangler.toml`, `render.yaml`, `.env.example`, `vite.config.ts`, `index.html`; tests excluded) without changing any doc. When a change is truly invisible in the docs (an internal refactor, a pure bug fix), add a line `Docs: none needed - <reason>` to the PR description instead.
 
 ## Database schema
