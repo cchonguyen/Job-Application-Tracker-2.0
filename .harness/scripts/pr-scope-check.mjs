@@ -20,6 +20,24 @@ export const SKIP_MARK = /^\s*(?:(?:it|test|describe)\.(?:skip|only)\(|(?:xit|xd
 const MANIFEST = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|requirements[^/]*\.txt|pyproject\.toml|uv\.lock|go\.(mod|sum)|Cargo\.(toml|lock))$/;
 // Spoke-owned engine-adjacent files that a spoke may change even though they sit in an engine folder
 const SPOKE_OWNED = new Set(['.claude/project-rules.md', '.claude/settings.spoke.json']);
+// Harness files a spoke receives from the hub: the slice gate workflows (copied from templates) and the gate script.
+// A spoke PR that carries exactly these paths is not a tripwire. Their content is not checked against the hub here,
+// so the PR check cannot prove they match the hub; the Referee watch on main is the backstop for that.
+export const SYNC_DELIVERED = new Set([
+  '.github/workflows/harness-slice-gate.yml',
+  '.github/workflows/harness-referee-watch.yml',
+  '.harness/scripts/ci-gate.mjs',
+  '.harness/scripts/ci-gate.test.mjs',
+]);
+
+// A workflow copy delivered by hub-sync: .github/workflows/<name>.yml is byte-identical to the hub template
+// .harness/templates/workflows/<name>.yml in the head. readHead(path) returns file text or null.
+export function isTemplateCopy(file, readHead) {
+  if (typeof readHead !== 'function' || !/^\.github\/workflows\/[^/]+\.yml$/.test(file)) return false;
+  const template = readHead(`.harness/templates/workflows/${file.split('/').pop()}`);
+  if (template === null || template === undefined) return false;
+  return template === readHead(file);
+}
 
 export function isPackageJsonVersionOnly(fileDiff) {
   if (!fileDiff) return false;
@@ -27,6 +45,16 @@ export function isPackageJsonVersionOnly(fileDiff) {
   if (added.length === 0 && removed.length === 0) return false;
   const VERSION_LINE = /^\s*"version"\s*:\s*"[^"]+"\s*,?\s*$/;
   return added.every((l) => VERSION_LINE.test(l)) && removed.every((l) => VERSION_LINE.test(l));
+}
+
+// Supabase migrations are a Red tripwire, except a new or additive-only SQL file under supabase/migrations/.
+// An edit that removes lines from an existing migration still trips the wire. Charlie approved this exemption
+// for the Concert Tracker spoke (2026-11-04); other paths under migrations folders still trip.
+export function isAdditiveSupabaseMigration(file, diff) {
+  if (!/^supabase\/migrations\/[^/]+\.sql$/.test(file)) return false;
+  const fileDiff = diff && diff.get ? diff.get(file) : null;
+  if (!fileDiff) return false;
+  return (fileDiff.removed || []).length === 0;
 }
 
 // Red tripwires: any match makes the slice Red, whatever colour the slice line carries
@@ -41,17 +69,21 @@ export const TRIPWIRES = [
       return true;
     },
   },
-  { name: 'migrations folder', test: (f) => /(^|\/)migrations\//.test(f) },
+  {
+    name: 'migrations folder',
+    test: (f, diff) => /(^|\/)migrations\//.test(f) && !isAdditiveSupabaseMigration(f, diff),
+  },
   { name: 'schema file', test: (f) => /schema/i.test(f) },
   { name: 'auth file', test: (f) => /(^|[/._-])auth([/._-]|$)/i.test(f) },
   { name: 'env file', test: (f) => /(^|\/)\.env[^/]*$/.test(f) },
   { name: 'AGENTS.md', test: (f) => f === 'AGENTS.md' },
-  { name: 'CI workflow', test: (f) => f.startsWith('.github/workflows/') },
+  { name: 'CI workflow', test: (f, _diff, readHead) => f.startsWith('.github/workflows/') && !SYNC_DELIVERED.has(f) && !isTemplateCopy(f, readHead) },
 ];
 
 export const isTestFile = (file) => TEST_FILE.test(file);
 export const isEngineFile = (file) =>
-  !SPOKE_OWNED.has(file) && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
+  !SPOKE_OWNED.has(file) && !SYNC_DELIVERED.has(file)
+  && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
 
 // A hub sync is the only legitimate way for a spoke to change engine files. It rewrites each synced file and
 // records its sha256 in .harness/managed.json. True only when every engine file changed matches its recorded hash,
@@ -144,6 +176,7 @@ export function analyze({
   fileContents = null,
   hubSync = false,
   agentsBlockOnly = false,
+  readHead = null,
 }) {
   const problems = [];
   const notes = [];
@@ -156,7 +189,7 @@ export function analyze({
   for (const file of changed) {
     if (agentsBlockOnly && file === 'AGENTS.md') continue;
     for (const t of TRIPWIRES) {
-      if (t.test(file, diff)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
+      if (t.test(file, diff, readHead)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
     }
   }
   for (const file of deleted) { problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true; }
@@ -171,18 +204,32 @@ export function analyze({
     }
   }
 
+  for (const file of touched) {
+    if (SYNC_DELIVERED.has(file)) notes.push(`Sync-delivered harness file: ${file}. Allowed by the scope check; its content is not verified against the hub.`);
+    else if (isTemplateCopy(file, readHead)) notes.push(`Sync-delivered harness file: ${file}. Identical to its hub template in .harness/templates/workflows/.`);
+  }
+
   // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change.
   // A slice PR usually marks its slice [x] by the time it opens, so fall back to slice lines this PR marks done.
   const active = progress.split('\n').filter((l) => ACTIVE_TASK.test(l));
   const doneInPr = (diff.get('.spec/PROGRESS.md')?.added ?? []).filter((l) => DONE_SLICE.test(l));
+  // A finish-slice commit promotes the next pending slice to [IN_PROGRESS]. When this PR changes none of that
+  // slice's Target files, the marker is only the next slice's placeholder, so the PR's done slices are checked.
+  // .spec/ targets do not count: every slice PR changes .spec/PROGRESS.md, so they would make a placeholder look touched.
+  const activeTargetsTouched = (line) => parseActiveTargets(line).filter((t) => !t.startsWith('.spec/')).some((t) =>
+    changed.some((file) => file === t || file.startsWith(t.endsWith('/') ? t : `${t}/`)));
   let sliceLines = [];
   if (active.length > 1) {
     problems.push(`${active.length} slices are [IN_PROGRESS]. The harness allows only one.`);
-  } else if (active.length === 1) {
+  } else if (active.length === 1 && (doneInPr.length === 0 || activeTargetsTouched(active[0]))) {
     sliceLines = active;
   } else if (doneInPr.length > 0) {
     sliceLines = doneInPr;
-    notes.push(`No slice is [IN_PROGRESS]. Checking the ${doneInPr.length} slice(s) this PR marks done.`);
+    notes.push(active.length === 1
+      ? `The [IN_PROGRESS] slice has no changed Target files in this PR. Checking the ${doneInPr.length} slice(s) this PR marks done.`
+      : `No slice is [IN_PROGRESS]. Checking the ${doneInPr.length} slice(s) this PR marks done.`);
+  } else if (active.length === 1) {
+    sliceLines = active;
   }
 
   let sliceType = null;
@@ -197,6 +244,8 @@ export function analyze({
       if (
         file.startsWith('.spec/') ||
         file === 'CLAUDE.md' ||
+        // A verified hub sync changes only hub-owned engine files and their manifest; the hash check above covers them
+        (hubSync && (isEngineFile(file) || file === MANAGED || file === SETTINGS)) ||
         ((file === 'package.json' || file.endsWith('/package.json')) && isPackageJsonVersionOnly(diff.get(file))) ||
         targets.some((t) => isAllowed(file, t))
       ) continue;
@@ -397,7 +446,10 @@ function main(argv) {
     agentsBlockOnly = baseText !== null && headText !== null
       && outsideHarnessBlock(baseText) === outsideHarnessBlock(headText);
   }
-  const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly });
+  const readHead = (file) => {
+    try { return fs.readFileSync(path.join(root, file), 'utf8'); } catch { return null; }
+  };
+  const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly, readHead });
 
   const verdict = formatJsonVerdict({
     changed,

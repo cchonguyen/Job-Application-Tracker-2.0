@@ -52,14 +52,14 @@ Your mission is to coordinate work with minimal context bloat. Do NOT explore ra
 
 ### 2. Quiet Verification Commands (Mandatory)
 - Unit Tests: `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
-- Typecheck & Lint: `npm run typecheck --silent && npm run lint --silent`
+- Typecheck & Lint: run the commands listed under `Project-Specific Commands` in `CLAUDE.md`.
 - Navigator Checkpoint (`finish-slice.mjs` -> `navigator.mjs`): `node .harness/scripts/finish-slice.mjs "<msg>"` -> `node .harness/scripts/navigator.mjs --check`
 - Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
 
-### 3. Context Atlas Sectors (`000–400`) (Read On-Demand Only)
-- `000` Card Catalog: `AGENTS.md` (Universal) & `CLAUDE.md` (Shim)
-- `100` Work Dispatch: `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130)
-- `200` Boundaries: `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220)
-- `300` Contracts: `.harness/config/thresholds.json` (305), `.spec/contracts/referee.md` (310), `.spec/contracts/circuit-breaker.md` (320), `.spec/contracts/baton-pass.md` (330), `.spec/contracts/review-relay.md` (340)
-- `400` System Spec: `.spec/SYSTEM_SPEC.md` (Architect Reference)
+### 3. Context Atlas (Read On-Demand Only)
+- The full sector table and coordinates live in `.spec/ATLAS.md`. Open only the coordinates a slice's `Coords:` field names. Do not copy the table here.
+
+### 4. Deployment & Merge Protocol (Mandatory)
+- **Zero Local Deploys:** Never run `npm run deploy` or `wrangler deploy` locally from a worktree. Production deployments happen exclusively via GitHub Actions when a PR merges into `main`.
+- **Merge Gate:** Before merging any PR (`gh pr merge`), always run `git fetch origin main && git rebase origin/main`, verify `git merge-base --is-ancestor origin/main HEAD` passes, and re-run quiet verification commands.
 <!-- <<< harness <<< -->
