@@ -93,6 +93,11 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Matching considers only jobs in Saved, Applied, Interviewing or Offer. Signals are the ATS board slug from the job's link (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) found in the email's links or sender, and the company name in the sender's name, domain or subject, plus title words as a tie-breaker. A clear winner is high confidence. A weaker or close match is shown as "check this".
 - Suggestions only move a job forward (Saved → Applied → Interviewing → Offer), or to Rejected from any open status. They never suggest Accepted or Declined, never create jobs, and never touch the captured job details, so the snapshot and duplicate rules are unaffected.
 
+### 4.8 Appearance (`src/lib/theme.ts`, `src/index.css`)
+- Light and dark mode plus five accent colors (Indigo default, Teal, Emerald, Amber, Rose), chosen in the Settings menu and saved in the browser (`jat-theme`). The saved theme is applied before first paint.
+- Status colors are fixed per status and never follow the accent; they are defined once in `src/lib/statusMeta.ts`.
+- The full design language and voice rules live in `docs/DESIGN_SYSTEM.md`.
+
 ---
 
 ## 5. API
