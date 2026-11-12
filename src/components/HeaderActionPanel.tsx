@@ -8,13 +8,7 @@ import {
   Briefcase,
   FileText,
   Sliders,
-  CheckCircle2,
   Bookmark,
-  Send,
-  Calendar,
-  Award,
-  XCircle,
-  Ban,
   Settings,
   HelpCircle,
   Cpu,
@@ -23,6 +17,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { JobStatus } from '../types';
+import { STATUS_META } from '../lib/statusMeta';
 import type { ThemeAccent, ThemeMode } from '../lib/theme';
 import { ThemeSelector } from './ThemeSelector';
 import { ManualJobModal } from './ManualJobModal';
@@ -58,15 +53,13 @@ interface HeaderActionPanelProps {
   };
 }
 
-const STATUS_OPTIONS: { value: JobStatus; label: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
-  { value: 'Applied', label: 'Applied', icon: Send, color: 'text-amber-500' },
-  { value: 'Saved', label: 'Saved', icon: Bookmark, color: 'text-slate-500' },
-  { value: 'Interviewing', label: 'Interviewing', icon: Calendar, color: 'text-blue-600' },
-  { value: 'Offer', label: 'Offer', icon: Award, color: 'text-purple-600' },
-  { value: 'Accepted', label: 'Accepted', icon: CheckCircle2, color: 'text-teal-600' },
-  { value: 'Rejected', label: 'Rejected', icon: XCircle, color: 'text-rose-600' },
-  { value: 'Declined', label: 'Declined', icon: Ban, color: 'text-stone-600' },
-];
+// Ingest status picker order: Applied first (the default), then the rest.
+const STATUS_OPTIONS: { value: JobStatus; label: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = (
+  ['Applied', 'Saved', 'Interviewing', 'Offer', 'Accepted', 'Rejected', 'Declined'] as JobStatus[]
+).map((status) => {
+  const meta = STATUS_META[status];
+  return { value: meta.value, label: meta.label, icon: meta.icon, color: meta.iconClass };
+});
 
 export const HeaderActionPanel = ({
   totalJobs,
