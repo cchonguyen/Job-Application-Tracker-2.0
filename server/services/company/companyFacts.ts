@@ -55,6 +55,7 @@ export async function resolveCompanyFacts(
     existingJobs?: JobRecord[];
     jobUrl?: string;
     jobTitle?: string;
+    checkAiQuota?: () => Promise<boolean> | boolean;
   },
   deps: CompanyFactsDeps = defaultDeps
 ): Promise<CompanyFacts> {
@@ -97,10 +98,15 @@ export async function resolveCompanyFacts(
   if (missing().length) apply(knownFields(input.extracted), 'job posting');
 
   if (missing().length) {
-    if (entry.search === undefined) {
-      entry.search = await safely(() => deps.search(input.company, { jobUrl: input.jobUrl, jobTitle: input.jobTitle }));
+    if (entry.search !== undefined) {
+      apply(entry.search, entry.search?.source);
+    } else {
+      const allowed = input.checkAiQuota ? await input.checkAiQuota() : true;
+      if (allowed) {
+        entry.search = await safely(() => deps.search(input.company, { jobUrl: input.jobUrl, jobTitle: input.jobTitle }));
+        apply(entry.search, entry.search?.source);
+      }
     }
-    apply(entry.search, entry.search?.source);
   }
 
   const unique = [...new Set(sources)];

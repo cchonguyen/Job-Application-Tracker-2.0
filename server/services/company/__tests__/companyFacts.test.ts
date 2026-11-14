@@ -69,6 +69,30 @@ describe('resolveCompanyFacts', () => {
     expect(facts.headquarters).toBe('Austin, TX');
     expect(facts.headcount).toBe('Unknown');
   });
+
+  it('skips the Gemini search fallback when checkAiQuota returns false', async () => {
+    const search = vi.fn().mockResolvedValue({ foundingYear: '2010', source: 'Google Search via Gemini' });
+    const facts = await resolveCompanyFacts(
+      { company: 'Stripe', checkAiQuota: async () => false },
+      {
+        wikidata: async () => ({
+          headcount: '8,000 employees (2023)',
+          headquarters: 'South San Francisco, United States',
+          ownership: 'Private',
+          source: 'Wikidata (Q7624104)',
+        }),
+        search,
+      }
+    );
+    expect(facts).toEqual({
+      headcount: '8,000 employees (2023)',
+      headquarters: 'South San Francisco, United States',
+      ownership: 'Private',
+      foundingYear: 'Unknown',
+      source: 'Wikidata (Q7624104)',
+    });
+    expect(search).not.toHaveBeenCalled();
+  });
 });
 
 describe('lookupWikidataCompany', () => {

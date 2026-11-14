@@ -23,9 +23,9 @@ describe('companyDomainFromJobUrl', () => {
   it('uses company site host for embedded Greenhouse params', () => {
     expect(
       companyDomainFromJobUrl(
-        'https://www.datavant.com/about/careers/open-roles/job?job_id=5301310008'
+        'https://www.vandelay.com/about/careers/open-roles/job?job_id=5301310008'
       )
-    ).toBe('datavant.com');
+    ).toBe('vandelay.com');
   });
 
   it('falls back to company name slug', () => {

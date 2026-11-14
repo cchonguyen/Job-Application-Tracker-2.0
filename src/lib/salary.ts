@@ -147,7 +147,7 @@ export function getBenchmarkSalary(company?: string, jobTitle?: string): string 
   const c = company.toLowerCase();
   const t = jobTitle.toLowerCase();
 
-  if (c.includes('transcarent')) {
+  if (c.includes('acme')) {
     if (t.includes('product manager')) {
       return '150k - 170k';
     }
@@ -155,13 +155,13 @@ export function getBenchmarkSalary(company?: string, jobTitle?: string): string 
       return '145k - 185k';
     }
   }
-  if (c.includes('veeva') && t.includes('product manager')) {
+  if (c.includes('globex') && t.includes('product manager')) {
     return '120k - 200k';
   }
-  if (c.includes('ensemble') && t.includes('product manager')) {
+  if (c.includes('initech') && t.includes('product manager')) {
     return '102k - 152k';
   }
-  if (c.includes('datavant') && t.includes('product manager')) {
+  if (c.includes('vandelay') && t.includes('product manager')) {
     return '170k - 200k';
   }
   return null;

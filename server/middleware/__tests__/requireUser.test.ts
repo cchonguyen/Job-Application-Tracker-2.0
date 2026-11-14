@@ -79,4 +79,22 @@ describe('requireUser', () => {
     expect(body.scopeUser).toBe('user-a');
     expect(body.hasDb).toBe(true);
   });
+
+  it('rejects a signed-in user when ALLOWED_USER_EMAILS excludes their email', async () => {
+    useSupabase();
+    process.env.ALLOWED_USER_EMAILS = 'owner@example.com, second@example.com';
+    const res = await fetch(`${baseUrl}/api`, { headers: { Authorization: 'Bearer good-token' } });
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body.success).toBe(false);
+  });
+
+  it('allows a signed-in user when ALLOWED_USER_EMAILS includes their email case-insensitively', async () => {
+    useSupabase();
+    process.env.ALLOWED_USER_EMAILS = 'owner@example.com, A@EXAMPLE.COM';
+    const res = await fetch(`${baseUrl}/api`, { headers: { Authorization: 'Bearer good-token' } });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.user.email).toBe('a@example.com');
+  });
 });

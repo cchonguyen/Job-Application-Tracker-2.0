@@ -282,7 +282,7 @@ export function detectAts(urlStr: string): AtsDetection {
   }
 
   // 2. Darwinbox check:
-  // e.g. transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2
+  // e.g. acme.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2
   if (host.includes('darwinbox.com') || host.includes('darwinbox.in')) {
     const companyDomain = host.replace(/^www\./, '').split('.')[0];
     const parts = pathname.split('/').filter(Boolean);

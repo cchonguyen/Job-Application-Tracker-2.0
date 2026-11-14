@@ -72,12 +72,14 @@ extractRouter.post('/extract-job', async (c) => {
     // Only the caller's own jobs: they feed both the duplicate check and company-fact reuse.
     const existingJobs = await jobRepository.listJobs(scope);
     const company = extractedData.company || 'Unknown Company';
+    const aiQuotaSkipped = diagnosticSteps.some((step) => step?.name === 'Daily AI Extraction Quota Limit');
     const companyMetadata = await resolveCompanyFacts({
       company,
       extracted: extractedData.companyMetadata,
       existingJobs,
       jobUrl: canonicalUrl || undefined,
       jobTitle: extractedData.jobTitle,
+      checkAiQuota: aiQuotaSkipped ? () => false : () => takeDailyUsage(scope, 'company-facts'),
     });
     const parsedRoleTeam = parseJobTitleAndTeam(
       extractedData.jobTitle || 'Unknown Role',

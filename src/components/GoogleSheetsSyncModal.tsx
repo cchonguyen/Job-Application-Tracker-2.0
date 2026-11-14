@@ -376,12 +376,12 @@ export const GoogleSheetsSyncModal = ({
 
                   <div className="pt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                     <a
-                      href="https://console.firebase.google.com/project/gen-lang-client-0302459519/authentication/settings"
+                      href="https://console.cloud.google.com/apis/credentials"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 font-bold text-indigo-600 hover:text-indigo-800 underline"
                     >
-                      <span>1. Open Firebase Console Settings</span>
+                      <span>1. Open Google Cloud Credentials</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                     <span className="text-slate-500">→</span>

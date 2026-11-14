@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { AppEnv } from '../app.types.ts';
 import { jobsRouter } from './jobs.routes.ts';
 import { extractRouter } from './extract.routes.ts';
@@ -7,6 +8,14 @@ import { emailSuggestionsRouter } from './emailSuggestions.routes.ts';
 import { requireUser } from '../middleware/requireUser.ts';
 
 export const apiRouter = new Hono<AppEnv>();
+
+apiRouter.use(
+  '*',
+  bodyLimit({
+    maxSize: 2 * 1024 * 1024,
+    onError: (c) => c.json({ success: false, error: 'Request payload is too large (max 2 MB).' }, 413),
+  })
+);
 
 // Public: tells the browser how to sign in. Everything registered after requireUser requires a signed-in user.
 apiRouter.route('/auth', authConfigRouter);

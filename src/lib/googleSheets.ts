@@ -139,6 +139,17 @@ export async function createGoogleSpreadsheet(
 }
 
 /**
+ * Prefixes values starting with formula trigger characters (=, +, -, @, tab, CR)
+ * with a leading apostrophe so Google Sheets USER_ENTERED mode treats them as plain text.
+ */
+export function sanitizeSheetCell(value: string): string {
+  if (/^[=+\-@\t\r]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
+/**
  * Converts JobRecord array into a 2D array of rows for Google Sheets.
  */
 export function formatJobsForSheets(jobs: JobRecord[]): (string | number)[][] {
@@ -148,19 +159,19 @@ export function formatJobsForSheets(jobs: JobRecord[]): (string | number)[][] {
     const team = job.team || job.positionMetadata?.team || '';
 
     return [
-      job.company || '',
-      job.jobTitle || '',
-      team,
-      job.status || '',
-      job.dateApplied || '',
-      job.salary || 'Not listed',
-      job.location || '',
-      job.industry || '',
-      job.url || '',
-      skills,
-      timeline.stateDurationText || '',
-      job.notes || '',
-      job.createdAt ? new Date(job.createdAt).toISOString().split('T')[0] : '',
+      sanitizeSheetCell(job.company || ''),
+      sanitizeSheetCell(job.jobTitle || ''),
+      sanitizeSheetCell(team),
+      sanitizeSheetCell(job.status || ''),
+      sanitizeSheetCell(job.dateApplied || ''),
+      sanitizeSheetCell(job.salary || 'Not listed'),
+      sanitizeSheetCell(job.location || ''),
+      sanitizeSheetCell(job.industry || ''),
+      sanitizeSheetCell(job.url || ''),
+      sanitizeSheetCell(skills),
+      sanitizeSheetCell(timeline.stateDurationText || ''),
+      sanitizeSheetCell(job.notes || ''),
+      sanitizeSheetCell(job.createdAt ? new Date(job.createdAt).toISOString().split('T')[0] : ''),
     ];
   });
 

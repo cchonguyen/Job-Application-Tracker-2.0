@@ -4,9 +4,11 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   onAuthStateChanged,
+  type Auth,
   type User,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { getAuthConfig } from './auth';
 
 declare global {
   interface Window {
@@ -30,8 +32,29 @@ export const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets.readonly',
 ];
 
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+let firebaseAuthInstance: Auth | null | undefined;
+
+function getFirebaseAuth(): Auth | null {
+  if (firebaseAuthInstance !== undefined) return firebaseAuthInstance;
+  if (!firebaseConfig.apiKey?.trim() || !firebaseConfig.projectId?.trim()) {
+    firebaseAuthInstance = null;
+    return null;
+  }
+  try {
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    firebaseAuthInstance = getAuth(app);
+  } catch {
+    firebaseAuthInstance = null;
+  }
+  return firebaseAuthInstance;
+}
+
+async function resolveOAuthClientId(): Promise<string> {
+  const fromFile = firebaseConfig.oAuthClientId?.trim();
+  if (fromFile) return fromFile;
+  const config = await getAuthConfig().catch(() => null);
+  return config?.googleClientId?.trim() || '';
+}
 
 const provider = new GoogleAuthProvider();
 WORKSPACE_SCOPES.forEach((scope) => {
@@ -69,16 +92,17 @@ export const loadGsi = (): Promise<boolean> => {
   });
 };
 
-export const signInWithGsi = async (): Promise<{ user: GoogleAuthUser; accessToken: string }> => {
+export const signInWithGsi = async (clientIdOverride?: string): Promise<{ user: GoogleAuthUser; accessToken: string }> => {
   await loadGsi();
-  if (!window.google?.accounts?.oauth2 || !firebaseConfig.oAuthClientId) {
+  const clientId = clientIdOverride || (await resolveOAuthClientId());
+  if (!window.google?.accounts?.oauth2 || !clientId) {
     throw new Error('Google Identity Services client is not initialized or OAuth Client ID is missing.');
   }
 
   return new Promise((resolve, reject) => {
     try {
       const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: firebaseConfig.oAuthClientId,
+        client_id: clientId,
         scope: WORKSPACE_SCOPES.join(' '),
         callback: async (response: any) => {
           if (response.error) {
@@ -135,7 +159,17 @@ export const initAuth = (
   onAuthSuccess?: (user: GoogleAuthUser | User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
+  const authInstance = getFirebaseAuth();
+  if (!authInstance) {
+    if (cachedUser && cachedAccessToken) {
+      onAuthSuccess?.(cachedUser, cachedAccessToken);
+    } else {
+      onAuthFailure?.();
+    }
+    return () => {};
+  }
+
+  return onAuthStateChanged(authInstance, async (user: User | null) => {
     if (user) {
       if (cachedAccessToken) {
         cachedUser = user;
@@ -159,9 +193,10 @@ export const googleSignIn = async (): Promise<{ user: GoogleAuthUser | User; acc
 
     // 1. First attempt: Google Identity Services (GIS) Token Client
     // This connects directly using the provisioned Google Cloud OAuth Client ID, bypassing Firebase Auth domain checks
-    if (firebaseConfig.oAuthClientId) {
+    const clientId = await resolveOAuthClientId();
+    if (clientId) {
       try {
-        const gisResult = await signInWithGsi();
+        const gisResult = await signInWithGsi(clientId);
         if (gisResult?.accessToken) {
           cachedAccessToken = gisResult.accessToken;
           cachedUser = gisResult.user;
@@ -181,7 +216,11 @@ export const googleSignIn = async (): Promise<{ user: GoogleAuthUser | User; acc
     }
 
     // 2. Fallback: Firebase Auth signInWithPopup
-    const result = await signInWithPopup(auth, provider);
+    const authInstance = getFirebaseAuth();
+    if (!authInstance) {
+      throw new Error('Google OAuth Client ID is not configured for Google Sheets sync.');
+    }
+    const result = await signInWithPopup(authInstance, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error('Failed to obtain Google Workspace access token. Please ensure permissions were granted.');
@@ -203,9 +242,12 @@ export const getAccessToken = async (): Promise<string | null> => {
 };
 
 export const logout = async (): Promise<void> => {
-  try {
-    await auth.signOut();
-  } catch {}
+  const authInstance = getFirebaseAuth();
+  if (authInstance) {
+    try {
+      await authInstance.signOut();
+    } catch {}
+  }
   cachedAccessToken = null;
   cachedUser = null;
 };

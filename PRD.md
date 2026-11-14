@@ -32,7 +32,7 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
 | Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
 | Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. The Render web service (`render.yaml`) still works as an alternative host. Both build with Bun |
-| Optional | Google Sheets sync from the browser (4.6), via a separate Google client in `firebase-applet-config.json` |
+| Optional | Google Sheets sync from the browser (4.6), via `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in `firebase-applet-config.json`) |
 
 ---
 
@@ -67,11 +67,11 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Import and export as JSON or CSV; optional Google Sheets sync (4.6).
 
 ### 4.4 Accounts and access
-- Anyone can sign up with Google. Each account sees, edits, imports and gets duplicate warnings against only its own jobs.
+- Anyone can sign up with Google when `ALLOWED_USER_EMAILS` is unset; setting `ALLOWED_USER_EMAILS` restricts `/api` access to those comma-separated email addresses (others receive HTTP 403). Each account sees, edits, imports and gets duplicate warnings against only its own jobs.
 - Every `/api` request (except `GET /api/auth/config`) carries the user's Supabase access token as `Authorization: Bearer <token>`. The server verifies it and queries Postgres as that user, so row-level security enforces ownership.
 - Imported jobs whose ids belong to someone else get a fresh id and become new rows; the server picks every new job's id.
-- Each user can run `EXTRACTION_DAILY_LIMIT` AI extractions per UTC day (default 30), and the same number of company-fact lookups, counted separately. Daily extraction quota is charged only when Gemini inference (Tier 3 or Tier 4) is actually invoked; Fast-Path extractions and WAF short-circuit fallbacks consume **0 AI quota**. When daily quota is exhausted, Fast-Path and deterministic fallbacks still process listings cleanly rather than hard-failing. With Supabase the counts live in `public.daily_usage` through `take_daily_usage()`, so they hold across restarts and across Worker instances; without Supabase, or if that function is missing, they are counted in the server's memory.
-- Job links are fetched only when they resolve to public addresses (checked on every redirect). Outbound requests are stream-capped at 2MB to prevent Worker memory exhaustion. On Node the check uses the system resolver; on Cloudflare it asks Cloudflare's DNS-over-HTTPS service.
+- Each user can run `EXTRACTION_DAILY_LIMIT` AI extractions per UTC day (default 30), and the same number of company-fact lookups, counted separately. Daily extraction quota is charged only when Gemini inference (Tier 3 or Tier 4) is actually invoked; Fast-Path extractions and WAF short-circuit fallbacks consume **0 AI quota**. During job extraction, `resolveCompanyFacts`'s Google-Search-grounded Gemini fallback also checks and counts against the caller's daily `company-facts` allowance (and is skipped when daily AI extraction quota was already exhausted). When daily quota is exhausted, Fast-Path and deterministic fallbacks still process listings cleanly rather than hard-failing. With Supabase the counts live in `public.daily_usage` through `take_daily_usage()` (which validates `p_kind` and `p_limit`), so they hold across restarts and across Worker instances; without Supabase, or if that function is missing, they are counted in the server's memory.
+- Job links are fetched only when they resolve to public addresses (checked on every redirect). Outbound requests are stream-capped at 2MB to prevent Worker memory exhaustion, and API request payloads are capped at 2MB (imports are limited to 1,000 jobs per request). On Node the check uses the system resolver; on Cloudflare it asks Cloudflare's DNS-over-HTTPS service.
 - Without Supabase the API runs as a single local user in development and returns 503 in production.
 
 ### 4.5 Versioning and checks
@@ -80,10 +80,10 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - The **Docs updated** check fails a PR that changes app files without changing a doc, and a `schema.sql` change without a `docs/MIGRATIONS.md` entry (`AGENTS.md`).
 
 ### 4.6 Google Sheets sync (`src/lib/googleSheets.ts`, `src/hooks/useGoogleSheetsSync.ts`)
-- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access to a Google OAuth client whose ID is `oAuthClientId` in `firebase-applet-config.json` (Google Identity Services popup, with Firebase Auth's popup as the fallback). The access token is kept in memory only.
-- The user picks an existing spreadsheet or creates one. Sync writes a header plus one row per job to the first tab from `A1`, and clears leftover rows below, so the tab mirrors the tracker and manual edits there are overwritten.
+- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in `firebase-applet-config.json`, using the Google Identity Services popup, with Firebase Auth's popup as an optional fallback when Firebase config is populated). The access token is kept in memory only.
+- The user picks an existing spreadsheet or creates one. Sync writes a header plus one row per job to the first tab from `A1`, prefixes formula trigger characters (`=`, `+`, `-`, `@`, tab, CR) with `'` to prevent formula injection, and clears leftover rows below, so the tab mirrors the tracker and manual edits there are overwritten.
 - Auto-sync (optional) re-syncs shortly after any change to the job list. The chosen sheet and the auto-sync setting are remembered per browser in `localStorage`.
-- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins** and in the Firebase project's **Authorized domains**.
+- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins** (and in the Firebase project's **Authorized domains** if using Firebase fallback).
 
 ### 4.7 Gmail status suggestions (`src/lib/emailSignals.ts`, `apps-script/GmailBridge.gs`)
 - A personal feature for the account named in `GMAIL_BRIDGE_OWNER_EMAIL`. Every other account gets `enabled: false` and never sees the owner's mail. Setup steps are in `docs/GMAIL_BRIDGE.md`.
@@ -158,6 +158,7 @@ interface JobRecord {
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
 | `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
+| `ALLOWED_USER_EMAILS` | Optional | Comma-separated Google account emails allowed to call `/api`; when empty, any Google account may sign in |
 | `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` | Optional | The Apps Script web app's `/exec` URL and its key (4.7). Store both as Secrets |
 | `GMAIL_BRIDGE_OWNER_EMAIL` | Optional | The only account allowed to see Gmail suggestions. All three must be set or the feature stays off |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` on Node, and makes the API refuse to run without Supabase. Set in `wrangler.toml` for Cloudflare |

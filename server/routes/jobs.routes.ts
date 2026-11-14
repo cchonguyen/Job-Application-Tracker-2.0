@@ -119,6 +119,10 @@ jobsRouter.post('/import', async (c) => {
       );
     }
 
+    if (jobs.length > 1000) {
+      return c.json({ success: false, error: 'Import is limited to 1,000 jobs at a time.' }, 400);
+    }
+
     const result = await jobRepository.upsertJobs(scopeOf(c), jobs);
     return c.json({
       success: true,

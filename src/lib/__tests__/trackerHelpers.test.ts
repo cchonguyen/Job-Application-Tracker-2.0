@@ -27,13 +27,13 @@ describe('detectAts', () => {
   it('detects embedded Greenhouse job_id on custom domains', () => {
     expect(
       detectAts(
-        'https://www.datavant.com/about/careers/open-roles/job?job_id=5301310008&gh_src=x'
+        'https://www.vandelay.com/about/careers/open-roles/job?job_id=5301310008&gh_src=x'
       )
     ).toEqual({
       type: 'greenhouse',
-      board: 'datavant',
+      board: 'vandelay',
       jobId: '5301310008',
-      canonicalUrl: 'https://datavant.com/about/careers/open-roles/job?job_id=5301310008',
+      canonicalUrl: 'https://vandelay.com/about/careers/open-roles/job?job_id=5301310008',
     });
   });
 
@@ -51,15 +51,15 @@ describe('detectAts', () => {
   it('detects Darwinbox SPA portals', () => {
     expect(
       detectAts(
-        'https://transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2'
+        'https://acme.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2'
       )
     ).toEqual({
       type: 'darwinbox',
-      board: 'transcarent',
+      board: 'acme',
       jobId: 'a6a7106352a0d2',
       requiresBrowserAuth: true,
       canonicalUrl:
-        'https://transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2',
+        'https://acme.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2',
     });
   });
 
@@ -152,8 +152,8 @@ describe('extractSalaryFromTextOrJson', () => {
   });
 
   it('does not fall back to synthetic benchmark salary (zero-fabrication)', () => {
-    expect(getBenchmarkSalary('Datavant', 'Sr. Product Manager')).toContain('170k');
-    const res = extractSalaryFromTextOrJson('No pay listed', null, 'Datavant', 'Product Manager');
+    expect(getBenchmarkSalary('Vandelay', 'Sr. Product Manager')).toContain('170k');
+    const res = extractSalaryFromTextOrJson('No pay listed', null, 'Vandelay', 'Product Manager');
     expect(res.salary).toBe('Not listed');
     expect(res.salaryMin).toBeNull();
     expect(res.salaryMax).toBeNull();

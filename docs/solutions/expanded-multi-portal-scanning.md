@@ -152,7 +152,7 @@ A thorough audit of the repository (`src/lib/`, `server/services/parsing/`, `ser
 * **Revision**: Implement `readResponseTextUpTo(response: Response, maxBytes = 2 * 1024 * 1024): Promise<string>` inside `safeFetch.ts` using `response.body?.getReader()`. Accumulate byte chunks up to `maxBytes` and call `reader.cancel()` cleanly if exceeded, decoding only the safe prefix with `TextDecoder`. Reduce `MAX_REDIRECTS` in `safeFetch.ts` from `5` to `3` to bound Cloudflare DoH subrequests.
 
 ### Refinement 3: Fixing Legacy Benchmark Salary Fabrication in `src/lib/salary.ts`
-* **Codebase Finding**: `src/lib/salary.ts` (lines 145–168 and 201–257) still contains `getBenchmarkSalary(company, jobTitle)` which injects hardcoded salaries (`"150k - 170k"` for Transcarent, `"120k - 200k"` for Veeva, `"102k - 152k"` for Ensemble, `"170k - 200k"` for Datavant) whenever `extractSalaryFromTextOrJson` is called with `company` and `jobTitle` hints and no salary is found in the text.
+* **Codebase Finding**: `src/lib/salary.ts` (lines 145–168 and 201–257) still contains `getBenchmarkSalary(company, jobTitle)` which injects hardcoded salaries (`"150k - 170k"` for Acme, `"120k - 200k"` for Globex, `"102k - 152k"` for Initech, `"170k - 200k"` for Vandelay) whenever `extractSalaryFromTextOrJson` is called with `company` and `jobTitle` hints and no salary is found in the text.
 * **Revision**: Remove `getBenchmarkSalary()` invocations from `extractSalaryFromTextOrJson()` so no extraction path can ever leak synthetic salary ranges, strictly enforcing Section 2 of `PRD.md`.
 
 ### Refinement 4: Preserving `needsManualReview()` Compatibility (`src/lib/formatHelpers.ts`)

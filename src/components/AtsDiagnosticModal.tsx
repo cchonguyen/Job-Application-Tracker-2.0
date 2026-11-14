@@ -45,8 +45,8 @@ const PRESET_TEST_CASES = [
     description: 'Tests Tier 2 Cheerio DOM + JSON-LD scraping followed by Tier 3 Gemini extraction',
   },
   {
-    name: 'Darwinbox SPA Portal (Transcarent)',
-    url: 'https://transcarent.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2',
+    name: 'Darwinbox SPA Portal (Acme)',
+    url: 'https://acme.darwinbox.com/ms/candidatev2/main/careers/jobDetails/a6a7106352a0d2',
     description: 'Tests detection of Angular SPA (<app-root>) and Cloudflare 403 bot guard diagnostics',
   },
   {
