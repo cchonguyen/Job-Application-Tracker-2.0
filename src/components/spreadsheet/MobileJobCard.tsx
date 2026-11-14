@@ -18,7 +18,6 @@ import {
   getCleanCityLocation,
   formatMicroSalary,
   getCompactTimeline,
-  getStatusDotColor,
 } from '../../lib/formatHelpers';
 import { PortalDropdown } from '../PortalDropdown';
 
@@ -142,7 +141,6 @@ export const MobileJobCard = ({
               const isCurrent = job.status === status;
               const meta = getStatusMeta(status);
               const ItemIcon = meta.icon;
-              const dotColor = getStatusDotColor(status);
 
               return (
                 <button

@@ -73,7 +73,7 @@ describe('accent palette contract', () => {
   });
 
   it('index.html theme-color is the default accent 600 step', () => {
-    expect(DEFAULT_THEME.accent).toBe('indigo');
-    expect(indexHtml).toContain('<meta name="theme-color" content="#4f46e5" />');
+    expect(DEFAULT_THEME.accent).toBe('cyan');
+    expect(indexHtml).toContain('<meta name="theme-color" content="#0b7285" />');
   });
 });

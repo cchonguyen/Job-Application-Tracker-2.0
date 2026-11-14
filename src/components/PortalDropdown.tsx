@@ -141,9 +141,8 @@ export const PortalDropdown = ({
         right: coords.right !== undefined ? `${coords.right}px` : undefined,
         maxHeight: `${coords.maxHeight}px`,
         overflowY: 'auto',
-        zIndex: 9999,
       }}
-      className={`bg-white border border-slate-200 rounded-xl shadow-xl max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-100 ${className}`}
+      className={`z-50 bg-white border border-slate-200 rounded-xl shadow-xl max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-100 ${className}`}
     >
       {children}
     </div>,

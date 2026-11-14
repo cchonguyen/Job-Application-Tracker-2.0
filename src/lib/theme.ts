@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type ThemeAccent = 'indigo' | 'teal' | 'amber' | 'rose' | 'emerald';
+export type ThemeAccent = 'cyan' | 'teal' | 'emerald' | 'amber' | 'rose' | 'indigo';
 
 export interface ThemePreference {
   mode: ThemeMode;
@@ -15,16 +15,17 @@ export const THEME_MODES: { id: ThemeMode; label: string }[] = [
 ];
 
 export const THEME_ACCENTS: { id: ThemeAccent; label: string; swatch: string }[] = [
-  { id: 'indigo', label: 'Indigo', swatch: 'oklch(51.1% 0.262 276.966)' },
+  { id: 'cyan', label: 'Cyan', swatch: 'oklch(50.3% 0.095 210.8)' },
   { id: 'teal', label: 'Teal', swatch: 'oklch(60% 0.118 184.704)' },
   { id: 'emerald', label: 'Emerald', swatch: 'oklch(59.6% 0.145 163.225)' },
   { id: 'amber', label: 'Amber', swatch: 'oklch(66.6% 0.179 58.318)' },
   { id: 'rose', label: 'Rose', swatch: 'oklch(58.6% 0.253 17.585)' },
+  { id: 'indigo', label: 'Indigo', swatch: 'oklch(51.1% 0.262 276.966)' },
 ];
 
 export const DEFAULT_THEME: ThemePreference = {
   mode: 'light',
-  accent: 'indigo',
+  accent: 'cyan',
 };
 
 export function isThemeMode(value: unknown): value is ThemeMode {
@@ -33,6 +34,7 @@ export function isThemeMode(value: unknown): value is ThemeMode {
 
 export function isThemeAccent(value: unknown): value is ThemeAccent {
   return (
+    value === 'cyan' ||
     value === 'indigo' ||
     value === 'teal' ||
     value === 'amber' ||
@@ -74,6 +76,7 @@ export function saveThemePreference(theme: ThemePreference): void {
 
 export function applyTheme(theme: ThemePreference, root: HTMLElement = document.documentElement): void {
   root.dataset.mode = theme.mode;
+  root.dataset.theme = theme.mode;
   root.dataset.accent = theme.accent;
   root.style.colorScheme = theme.mode;
 }

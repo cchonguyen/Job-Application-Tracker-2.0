@@ -30,7 +30,7 @@ export function getWorkArrangementMeta(
     return {
       type: 'Remote',
       label: 'Remote',
-      pillClass: 'bg-indigo-50 text-indigo-700 border-indigo-200/70',
+      pillClass: 'bg-slate-100 text-slate-700 border border-slate-200',
       iconType: 'cloud',
     };
   }

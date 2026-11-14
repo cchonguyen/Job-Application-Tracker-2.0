@@ -8,7 +8,7 @@ The visual language and product voice of Job Application Tracker, written so a n
 3. Copy the token files listed in [9. Starter kit](#9-starter-kit) so the theme works on day one.
 4. Keep the "Philosophy" and "Voice" sections. Replace the product-specific examples (statuses, job fields) with the new app's own.
 
-In this repo, the code is the source of truth for values. A test (`src/lib/__tests__/designTokens.test.ts`) fails when the status colors or accent palettes drift apart, and this file is updated in the same PR as any change to them.
+In this repo, `design-system/profile.md` declares the project's Harness UI profile (following `.harness/design-system/README.md`, `voice.md`, and `principles.md`; `tokens.css` and `bundle.css` are never edited directly) and the code in `src/index.css`, `src/lib/theme.ts`, and `src/lib/statusMeta.ts` is the source of truth for values. A test (`src/lib/__tests__/designTokens.test.ts`) fails when the status colors or accent palettes drift apart, and this file is updated in the same PR as any change to them.
 
 ---
 
@@ -20,7 +20,7 @@ The app is a quiet, dense work tool. It should feel like a well-kept spreadsheet
 |---|---|
 | **Calm by default** | Neutral slate surfaces carry almost everything. Color is reserved for meaning (status, accent, warnings), so it stays legible. |
 | **Dense, not cramped** | Small type (`text-xs`) and tight spacing fit a whole pipeline on one screen. Generous radius and soft borders keep it from feeling crowded. |
-| **One accent, chosen by the user** | Interactive elements share a single accent hue. The user can switch it (five options); the app never hard-codes a brand color into a component. |
+| **One accent, chosen by the user** | Interactive elements share a single accent hue. The user can switch it (six options, defaulting to `cyan`); the app never hard-codes a brand color into a component. |
 | **Meaning never depends on the accent** | Status and warning colors come from fixed hues outside the accent scale, so "Interviewing" looks the same under every accent and in both modes. |
 | **Color is never the only signal** | Every status pairs a hue with an icon and a text label. |
 | **Honest data** | The UI shows what is known and marks what is not. Missing values read `Unknown` or `Not listed`; nothing is filled with plausible defaults. |
@@ -57,25 +57,28 @@ Slate is the whole interface: backgrounds, borders, text. Common roles:
 | Body text | `text-slate-700` / `text-slate-600` | |
 | Secondary text, labels | `text-slate-500` | |
 | Placeholder, disabled, meta | `text-slate-400` | |
-| Modal overlay | `bg-slate-900/60` + `backdrop-blur-sm` | |
+| Modal overlay | `.jat-scrim` + `backdrop-blur-xs` + `overflow-y-auto` | `--jat-scrim`: `rgba(24, 24, 27, 0.42)` light, `rgba(6, 6, 9, 0.68)` dark |
+| Toast / tooltip surface | `.jat-tooltip` | `--jat-tooltip-bg: #18181b`, `--jat-tooltip-text: #ececf1` |
 
 ### 3.2 Accent (user-selectable)
 
-Components always write `indigo-*` for accent color. `src/index.css` redefines the `--color-indigo-50` to `--color-indigo-950` variables per `data-accent` attribute on `<html>`, so `bg-indigo-600` becomes teal, amber, rose or emerald when the user picks one. Nothing else in the UI may use `indigo-*` for a non-accent meaning.
+Components always write `indigo-*` for accent color. `src/index.css` redefines the `--color-indigo-50` to `--color-indigo-950` variables per `data-accent` attribute on `<html>`, so `bg-indigo-600` becomes cyan (default), teal, emerald, amber, rose, or indigo when the user picks one. Nothing else in the UI may use `indigo-*` for a non-accent meaning.
 
 | Accent | id | 600 step (primary) |
 |---|---|---|
-| Indigo (default) | `indigo` | `oklch(51.1% 0.262 276.966)` (`#4f46e5`) |
+| Cyan (`neon-cyan`, default) | `cyan` | `oklch(50.3% 0.095 210.8)` (`#0b7285` light / `#4fd8eb` dark) |
 | Teal | `teal` | `oklch(60% 0.118 184.704)` |
 | Emerald | `emerald` | `oklch(59.6% 0.145 163.225)` |
 | Amber | `amber` | `oklch(66.6% 0.179 58.318)` |
 | Rose | `rose` | `oklch(58.6% 0.253 17.585)` |
+| Indigo | `indigo` | `oklch(51.1% 0.262 276.966)` |
 
-Each accent is a full 11-step scale (50 to 950) taken from the matching Tailwind palette. Accent roles:
+Each accent is a full 11-step scale (50 to 950) taken from the matching palette. Accent roles:
 
 | Role | Class |
 |---|---|
 | Primary button fill | `bg-indigo-600 hover:bg-indigo-700` |
+| Active switch / toggle track | `peer-checked:bg-indigo-600` (never green/good) |
 | Links, active icons, selected text | `text-indigo-600` (`text-indigo-700` on tinted backgrounds) |
 | Tinted chip / selected row | `bg-indigo-50 border-indigo-200 text-indigo-700` |
 | Focus ring | `focus:ring-2 focus:ring-indigo-500` |
@@ -83,10 +86,12 @@ Each accent is a full 11-step scale (50 to 950) taken from the matching Tailwind
 
 ### 3.3 Dark mode
 
-Dark mode is a remap, not a second set of classes. With `data-mode="dark"` on `<html>`:
+Dark mode is a remap, not a second set of classes. `src/lib/theme.ts` and the pre-paint script in `index.html` keep both `data-mode` and `data-theme` synced on `<html>` (defaulting to `light`), alongside `data-accent`. With `data-mode="dark"` on `<html>`:
 
 - The slate scale is inverted (`slate-50` becomes the darkest surface, `slate-900` the lightest text), all on a cool blue-gray hue (oklch hue about 255 to 265).
 - `--color-white` becomes a dark surface (`oklch(22% 0.03 265)`), so `bg-white` cards stay cards.
+- Pastel tint steps (`50` to `300`) are inverted for dark mode (`color-mix` in oklch for `indigo-*`, and dedicated dark surface/border oklch steps for status and semantic hues `amber`, `orange`, `blue`, `purple`, `emerald`, `rose`, `teal`, `stone`, `sky`), leaving `500`/`600`/`700`+ solid fills untouched.
+- Dark-mode ink rules remap `.text-*-700`, `.text-*-800`, and `.text-*-900` (and light-on-dark `.text-*-100`/`200` where used) to maintain `>=4.5:1` contrast against dark tints.
 - `text-white` is forced back to pure white so text on accent buttons and badges keeps contrast.
 - `color-scheme: dark` is set so native controls and scrollbars follow.
 - Theme changes fade background and text color over 160 ms.
@@ -151,7 +156,7 @@ Weights: `font-semibold` is the default emphasis, `font-bold` for titles and val
 |---|---|
 | Inputs, buttons, menus, small cards | `rounded-lg` |
 | Cards, panels, callouts | `rounded-xl` |
-| Modals and dialogs | `rounded-2xl` (mobile bottom sheets: `rounded-t-3xl`) |
+| Modals and dialogs | `rounded-t-2xl sm:rounded-2xl` (mobile bottom sheet on phones; `JobDetailModal` uses `rounded-t-3xl sm:rounded-2xl`) |
 | Pills, dots, avatars, progress bars | `rounded-full` |
 
 **Elevation.** Mostly flat. Borders separate surfaces before shadows do.
@@ -161,12 +166,12 @@ Weights: `font-semibold` is the default emphasis, `font-bold` for titles and val
 
 **Motion.** Short and functional.
 - Hover and color changes: `transition-colors` (or `transition-all`) at the default 150 ms.
-- Modals enter with `animate-in fade-in zoom-in-95 duration-150`; overlays `fade-in duration-200`.
+- Modals and menus enter with CSS entrance animations in `src/index.css` (`.animate-in`, `.fade-in`, `.zoom-in-95`, `.slide-in-from-top-*`, `.slide-in-from-bottom-*` backed by `@keyframes jat-enter`). Under `@media (prefers-reduced-motion: reduce)`, `.animate-in` animations are disabled.
 - Loading: a lucide `Loader2` with `animate-spin`. No skeleton shimmer.
 
 **Icons.** lucide-react only, stroke style. `w-3.5 h-3.5` inside `text-xs` controls, `w-4 h-4` standalone, `w-5 h-5` in headers. Icons inherit text color unless they carry a status tint.
 
-**App icon.** A rounded square (radius 7 of 32) filled with the default accent `#4f46e5`, holding a white lucide-style briefcase with a 2.5 stroke and round caps (`public/favicon.svg`). Browser `theme-color` is the same `#4f46e5`.
+**App icon.** A rounded square (radius 7 of 32) filled with the default accent `#0b7285` (`cyan`), holding a white lucide-style briefcase with a 2.5 stroke and round caps (`public/favicon.svg`). Browser `theme-color` is the same `#0b7285`.
 
 ---
 
@@ -202,10 +207,13 @@ Label: eyebrow token (4). Value: `text-xs font-semibold text-slate-800`. Missing
 `bg-white border border-slate-200 rounded-xl shadow-2xs`. A card that represents a pipeline item shows its status with the status badge or dot. If a stronger cue is needed, use `border-l-4` + `STATUS_META[status].borderAccent`.
 
 **Modal**
-- Overlay: `fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200`
-- Panel: `relative w-full max-w-xl bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`
-- On phones the panel becomes a bottom sheet: `rounded-t-3xl sm:rounded-2xl`, `max-h-[90dvh]`, `pb-[env(safe-area-inset-bottom)]`.
-- Header with title and a close icon button; scrollable body; footer with secondary then primary button on the right.
+- Z-index scale: `z-40` for primary dialogs and the sticky header (header-triggered modals portal to `document.body` to escape header transform bounds); `z-50` for stacked confirmation dialogs (`DuplicateWarningModal`, `GoogleSheetsSyncModal` confirm), `PortalDropdown`, and `.jat-toast-container` (matching `--z-toast: 50`).
+- Overlay: `fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-150` (`z-50` for stacked confirmations).
+- Panel: `role="dialog"` (or `role="alertdialog"` for confirmations), `aria-modal="true"`, `aria-labelledby={headingId}`, `relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]` (`JobDetailModal` uses `rounded-t-3xl sm:rounded-2xl`).
+- Header with heading (`id={headingId}`) and a close `<button type="button">` using Lucide `<X />` with an explicit `aria-label="Close ..."`; scrollable body; footer with secondary then primary button on the right.
+
+**Toast**
+- Positioned via `.jat-toast-container` in `src/index.css` (`position: fixed; right: 1.25rem; bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px)); z-index: 50;`), using `.jat-tooltip` for success toasts and `role="status" aria-live="polite"`.
 
 **Warning callout**
 `p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs`, used for duplicates and incomplete captures, always with a way forward ("save anyway" or "skip").
@@ -217,15 +225,15 @@ Full-width spreadsheet on desktop, stacked cards on mobile. `html, body, #root` 
 
 ## 7. Voice and content
 
-The product voice is plain, specific and honest. It sounds like a capable assistant handing you a filled-in form.
+The product voice uses `Plain` warmth per `.harness/design-system/voice.md` and `design-system/profile.md`: plain, specific, and honest, like a capable assistant handing you a filled-in form.
 
 - **Say what happened, in the user's terms.** "Saved as a new row" beats "Operation completed".
 - **Never pretend to know.** Show `Unknown` or `Not listed` and a **Needs review** badge instead of a guess. A confident wrong value is worse than an honest blank.
 - **Warn, then let the user decide.** Duplicate and risk messages explain what matched and offer a choice. They never block.
 - **Keep the user's data theirs.** Captured details are a snapshot; copy never implies the app will change them later.
-- **Short labels.** Buttons are a verb plus an object in Title Case (`Delete Job`, `Sync Now`). Field labels are nouns (`Date Applied`, `Current Status`).
-- **Destructive confirmations ask a question.** `Delete this posting?`, followed by what will be lost.
-- **No exclamation marks, emoji or hype** in UI copy.
+- **Short, sentence-case labels.** Buttons and actions name what they do in sentence case (`Delete job`, `Sync now`, `Personal notes`), never "OK" or "Submit".
+- **Destructive confirmations ask a question.** `Delete?` / `Delete this posting?`, followed by an explicit action (`Delete job`).
+- **No exclamation marks, emoji, celebrations, or hype** in UI copy.
 
 ---
 
@@ -245,7 +253,8 @@ Files a new app copies to get the same theme working:
 
 | Copy from this repo | What it gives you |
 |---|---|
-| `src/index.css` | The five accent palettes, dark mode remap, white-text fix and theme fade |
+| `src/index.css` | The six accent palettes, dark mode pastel/ink remap, `.jat-scrim`, `.jat-tooltip`, `.jat-toast-container`, entrance animations, white-text fix, and theme fade |
+| `design-system/profile.md` | Harness UI profile declaring `neon-cyan` signature hue, dual-theme mode, density, display font override, `Plain` voice, and state map |
 | `src/lib/theme.ts` | Mode and accent types, the accent list with swatches, load/save/apply helpers (storage key `jat-theme`; rename it for the new app) |
 | The inline `<script>` in `index.html` `<body>` | Applies the saved theme before first paint, so there is no flash of the wrong theme. Its accent list must match `THEME_ACCENTS` |
 | `src/components/ThemeSelector.tsx` | Mode toggle and accent swatches for a settings menu |
@@ -254,7 +263,7 @@ Files a new app copies to get the same theme working:
 
 **Onboarding checklist for a new app**
 1. Tailwind v4 and lucide-react installed.
-2. Theme files copied; `data-mode` and `data-accent` set on `<html>` before first paint.
+2. Theme files copied; `data-mode`, `data-theme`, and `data-accent` set on `<html>` before first paint.
 3. Components use `slate-*` for structure, `indigo-*` for accent only, and a `STATUS_META`-style map for every state color.
 4. Base text is `text-xs`; labels use the eyebrow token.
 5. Every interactive element has the indigo focus ring.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { X, Save, Pencil, MapPin, Cloud, Building2 } from 'lucide-react';
 import { JobRecord, JobStatus } from '../types';
 import { todayIsoDate } from '../lib/jobDates';
@@ -40,6 +40,7 @@ export const EditJobModal = ({ job, isOpen, onClose, onSave }: EditJobModalProps
   const [employmentType, setEmploymentType] = useState('Full-time');
   const [skillsStr, setSkillsStr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const headingId = useId();
 
   useEffect(() => {
     if (job) {
@@ -126,24 +127,30 @@ export const EditJobModal = ({ job, isOpen, onClose, onSave }: EditJobModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+    <div className="fixed inset-0 z-40 overflow-y-auto jat-scrim backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="bg-white rounded-t-2xl sm:rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]"
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <div className="shrink-0 px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h3 id={headingId} className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Pencil className="w-4 h-4 text-indigo-600" />
-              Edit Application Attributes
+              Edit application
             </h3>
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close edit job dialog"
               className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto text-xs">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Company Brand Name</label>
@@ -408,7 +415,7 @@ export const EditJobModal = ({ job, isOpen, onClose, onSave }: EditJobModalProps
             </div>
           </div>
 
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <div className="shrink-0 px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -422,7 +429,7 @@ export const EditJobModal = ({ job, isOpen, onClose, onSave }: EditJobModalProps
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{isSubmitting ? 'Saving...' : 'Save Changes'}</span>
+              <span>{isSubmitting ? 'Saving…' : 'Save changes'}</span>
             </button>
           </div>
         </form>

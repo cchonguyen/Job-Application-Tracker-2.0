@@ -10,6 +10,7 @@ import {
   Upload,
   Loader2,
   Download,
+  X,
 } from 'lucide-react';
 import { JobRecord, JobStatus } from '../../types';
 import { exportJobsToCsv, exportJobsToJson } from '../../utils/export';
@@ -104,9 +105,10 @@ export const SpreadsheetToolbar = ({
             <button
               type="button"
               onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 bg-slate-200 rounded-full w-4 h-4 inline-flex items-center justify-center font-bold cursor-pointer"
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-slate-200 rounded-full w-4 h-4 inline-flex items-center justify-center cursor-pointer"
             >
-              ×
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>

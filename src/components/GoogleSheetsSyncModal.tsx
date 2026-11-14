@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import {
   FileSpreadsheet,
   ExternalLink,
@@ -72,6 +72,8 @@ export const GoogleSheetsSyncModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
+  const mainHeadingId = useId();
+  const confirmHeadingId = useId();
 
   // Mandatory confirmation state for destructive overwrite
   const [pendingConfirmAction, setPendingConfirmAction] = useState<{
@@ -164,8 +166,14 @@ export const GoogleSheetsSyncModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+    <>
+    <div className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-150">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={mainHeadingId}
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]"
+      >
         {/* Header */}
         <div className="px-6 py-4.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-3">
@@ -173,7 +181,7 @@ export const GoogleSheetsSyncModal = ({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h2 id={mainHeadingId} className="text-base font-bold text-slate-900 flex items-center gap-2">
                 Google Sheets Synchronization
               </h2>
               <p className="text-xs text-slate-500">
@@ -182,7 +190,9 @@ export const GoogleSheetsSyncModal = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close Google Sheets sync dialog"
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -442,7 +452,7 @@ export const GoogleSheetsSyncModal = ({
                         onChange={(e) => onAutoSyncChange(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
 
@@ -452,17 +462,17 @@ export const GoogleSheetsSyncModal = ({
                       type="button"
                       onClick={handleManualSyncNow}
                       disabled={syncStatus === 'syncing' || !hasToken}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-                      <span>{syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}</span>
+                      <span>{syncStatus === 'syncing' ? 'Syncing…' : 'Sync now'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={onDisconnectSheet}
                       className="px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg font-medium transition-colors cursor-pointer"
                     >
-                      Disconnect Sheet
+                      Disconnect sheet
                     </button>
                   </div>
                 </div>
@@ -483,10 +493,10 @@ export const GoogleSheetsSyncModal = ({
                     <button
                       type="button"
                       onClick={() => setTab('create')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Create New Sheet</span>
+                      <span>Create new sheet</span>
                     </button>
                     <button
                       type="button"
@@ -494,7 +504,7 @@ export const GoogleSheetsSyncModal = ({
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
                       <FolderOpen className="w-4 h-4 text-slate-500" />
-                      <span>Pick Existing</span>
+                      <span>Pick existing</span>
                     </button>
                   </div>
                 </div>
@@ -532,7 +542,7 @@ export const GoogleSheetsSyncModal = ({
                 type="button"
                 onClick={handleCreateSheet}
                 disabled={isSubmitting || !hasToken}
-                className="w-full inline-flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                className="w-full inline-flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
@@ -563,7 +573,7 @@ export const GoogleSheetsSyncModal = ({
                   className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold cursor-pointer"
                 >
                   <RefreshCw className={`w-3 h-3 ${isLoadingSheets ? 'animate-spin' : ''}`} />
-                  <span>Refresh List</span>
+                  <span>Refresh list</span>
                 </button>
               </div>
 
@@ -635,7 +645,7 @@ export const GoogleSheetsSyncModal = ({
               <button
                 type="submit"
                 disabled={isSubmitting || !manualSheetUrl.trim() || !hasToken}
-                className="w-full inline-flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                className="w-full inline-flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
@@ -665,23 +675,39 @@ export const GoogleSheetsSyncModal = ({
           </button>
         </div>
       </div>
+    </div>
 
       {/* MANDATORY User Confirmation Dialog for Mutating/Overwriting Sheet Data */}
       {pendingConfirmAction && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-100">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-md w-full p-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-100">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={confirmHeadingId}
+            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-5 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 id={confirmHeadingId} className="text-sm font-bold text-slate-900">
+                    {pendingConfirmAction.title}
+                  </h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {pendingConfirmAction.description}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-slate-900">
-                  {pendingConfirmAction.title}
-                </h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {pendingConfirmAction.description}
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setPendingConfirmAction(null)}
+                aria-label="Close confirmation dialog"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
@@ -699,14 +725,14 @@ export const GoogleSheetsSyncModal = ({
                   setPendingConfirmAction(null);
                   await action();
                 }}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors cursor-pointer"
               >
-                Confirm & Sync
+                Confirm & sync
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

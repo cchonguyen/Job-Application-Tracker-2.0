@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { X, Cpu, Database, CheckCircle2, ArrowRight, ExternalLink } from 'lucide-react';
 
 interface DevSandboxModalProps {
@@ -44,12 +45,19 @@ export const DevSandboxModal = ({
   onOpenAtsDebugger,
   isIngesting,
 }: DevSandboxModalProps) => {
+  const headingId = useId();
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="fixed inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]"
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2.5">
@@ -57,14 +65,15 @@ export const DevSandboxModal = ({
               <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Sandbox & ATS Diagnostics</h3>
+              <h3 id={headingId} className="text-sm font-bold text-slate-900">Sandbox & ATS Diagnostics</h3>
               <p className="text-xs text-slate-500">Pipeline verification, test URLs, and extraction engine inspect</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            aria-label="Close sandbox dialog"
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -148,7 +157,7 @@ export const DevSandboxModal = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span>Open ATS Diagnostic Tool</span>
+              <span>Open ATS diagnostic tool</span>
             </button>
           </div>
         </div>

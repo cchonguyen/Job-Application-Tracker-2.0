@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { X, Bookmark, RefreshCw } from 'lucide-react';
 import { buildBookmarklet, getCaptureToken } from '../lib/captureBookmarklet';
 
@@ -10,6 +10,7 @@ interface BookmarkletModalProps {
 export const BookmarkletModal = ({ isOpen, onClose }: BookmarkletModalProps) => {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const [token, setToken] = useState(() => getCaptureToken());
+  const headingId = useId();
 
   // React refuses javascript: URLs in href, so the bookmarklet is set on the DOM node directly.
   useEffect(() => {
@@ -21,14 +22,25 @@ export const BookmarkletModal = ({ isOpen, onClose }: BookmarkletModalProps) => 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center jat-scrim backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-6 space-y-4 text-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6 space-y-4 text-sm max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">One-click capture</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+          <h2 id={headingId} className="text-base font-semibold text-slate-900">One-click capture</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close one-click capture dialog"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>

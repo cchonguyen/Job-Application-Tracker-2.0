@@ -355,7 +355,7 @@ export const AnalyticsBar = ({ jobs, onSelectJob }: AnalyticsBarProps) => {
                               3. Screenings & Interviews
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                                 {funnel.appliedToInterviewRate}% conversion
                               </span>
                               <span className="text-slate-900 font-bold">{funnel.interviewing} active</span>
@@ -426,7 +426,7 @@ export const AnalyticsBar = ({ jobs, onSelectJob }: AnalyticsBarProps) => {
                               className="flex-1 flex flex-col items-center justify-end h-full gap-1.5 group relative"
                             >
                               {/* Hover tooltip */}
-                              <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-slate-900 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                              <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none jat-tooltip text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
                                 {week.label}: {week.count} applications
                               </div>
 
