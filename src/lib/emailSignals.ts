@@ -39,11 +39,30 @@ const REJECT_PHRASES = [
   'not to move forward',
   'not moving forward',
   'will not be moving forward',
+  'no longer moving forward',
+  'unable to move forward',
+  'cannot move forward',
+  "won't be moving forward",
+  'decided not to proceed',
+  'not to proceed',
+  'not be proceeding',
+  "won't be proceeding",
   'decided to pursue other candidates',
   'move forward with other candidates',
   'position has been filled',
   'no longer considering',
   'not selected',
+  'regret to inform',
+  'more closely aligned',
+  'other applicants',
+  'not the right fit',
+  "couldn't move further",
+  'could not move further',
+];
+const REJECT_PATTERNS = [
+  /\b(?:role|position)\s+has\s+(?:now\s+)?been\s+(?:filled|closed)\b/,
+  /\bfilled\s+the\s+(?:role|position)\b/,
+  /\b(?:move\s+forward|moving\s+forward|pursue|proceed|proceeding)\s+with\s+(?:other\s+candidates|another\s+candidate)\b/,
 ];
 const OFFER_PHRASES = ['offer letter', 'pleased to offer', 'extend an offer', 'extend you an offer'];
 const INTERVIEW_PHRASES = [
@@ -67,6 +86,16 @@ function findPhrase(haystack: string, phrases: readonly string[]): string | unde
   return phrases.find((phrase) => haystack.includes(phrase));
 }
 
+function findRejectionMatch(haystack: string): string | undefined {
+  const phrase = findPhrase(haystack, REJECT_PHRASES);
+  if (phrase) return phrase;
+  for (const pattern of REJECT_PATTERNS) {
+    const match = haystack.match(pattern);
+    if (match) return match[0];
+  }
+  return undefined;
+}
+
 function findInterviewLink(item: EmailItem): string | undefined {
   const haystack = [...item.links, item.snippet, item.subject].join(' ').toLowerCase();
   const pattern = findPhrase(haystack, INTERVIEW_LINK_PATTERNS);
@@ -78,11 +107,11 @@ function findInterviewLink(item: EmailItem): string | undefined {
 export function classifyEmail(item: EmailItem): EmailClassification {
   const text = `${item.subject} ${item.snippet}`.toLowerCase();
 
+  const rejected = findRejectionMatch(text);
+  if (rejected) return { status: 'Rejected', confidence: 'high', reason: `matched "${rejected}"` };
+
   const alert = findPhrase(text, ALERT_PHRASES);
   if (alert) return { status: null, confidence: 'high', reason: `matched "${alert}" (job alert)` };
-
-  const rejected = findPhrase(text, REJECT_PHRASES);
-  if (rejected) return { status: 'Rejected', confidence: 'high', reason: `matched "${rejected}"` };
 
   const offer = findPhrase(text, OFFER_PHRASES);
   if (offer) return { status: 'Offer', confidence: 'high', reason: `matched "${offer}"` };

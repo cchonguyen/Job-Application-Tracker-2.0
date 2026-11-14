@@ -7,7 +7,7 @@ import type { EmailItem } from '../../src/lib/emailSignals.types.ts';
 
 export const emailSuggestionsRouter = new Hono<AppEnv>();
 
-const BRIDGE_TIMEOUT_MS = 20_000;
+const BRIDGE_TIMEOUT_MS = 45_000;
 
 interface BridgeConfig {
   url: string;
