@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../app.types.ts';
 import { jobRepository } from '../services/storage/index.ts';
 import { scopeOf } from '../middleware/requireUser.ts';
-import { buildSuggestions } from '../../src/lib/emailSignals.ts';
+import { buildSuggestions, findUnmatchedRejections } from '../../src/lib/emailSignals.ts';
 import type { EmailItem } from '../../src/lib/emailSignals.types.ts';
 
 export const emailSuggestionsRouter = new Hono<AppEnv>();
@@ -69,8 +69,10 @@ emailSuggestionsRouter.get('/', async (c) => {
     }
     const items = asEmailItems(body.items);
     const jobs = await jobRepository.listJobs(scopeOf(c));
+    const bridgeVersion = typeof body.version === 'number' ? body.version : null;
     const suggestions = buildSuggestions(items, jobs);
-    return c.json({ success: true, enabled: true, scanned: items.length, suggestions });
+    const unmatchedRejections = findUnmatchedRejections(items, jobs);
+    return c.json({ success: true, enabled: true, bridgeVersion, scanned: items.length, suggestions, unmatchedRejections });
   } catch (err: any) {
     const reason = err?.name === 'TimeoutError' ? 'The Gmail bridge timed out' : 'Could not reach the Gmail bridge';
     return c.json({ success: false, enabled: true, error: reason }, 502);

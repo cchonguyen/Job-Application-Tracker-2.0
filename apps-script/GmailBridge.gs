@@ -16,6 +16,8 @@
  * Step-by-step guide: docs/GMAIL_BRIDGE.md
  */
 
+const BRIDGE_VERSION = 3;
+
 // Edit these to change which emails are included. The days window is added in front.
 // Split into flat groups because Gmail's query parser can drop terms in nested (from:(...) OR subject:(...) OR "...") queries.
 const BASE_FILTERS = '-in:chats -category:promotions';
@@ -37,7 +39,7 @@ function doGet(e) {
     const params = (e && e.parameter) || {};
     if (!isAuthorized(params.key)) return json({ ok: false, error: 'unauthorized' });
     const days = parseDays(params.days);
-    return json({ ok: true, items: collectItems(days) });
+    return json({ ok: true, version: BRIDGE_VERSION, items: collectItems(days) });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message ? err.message : err) });
   }

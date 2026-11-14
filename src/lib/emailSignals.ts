@@ -3,7 +3,7 @@
 
 import type { JobRecord, JobStatus } from '../types';
 import { detectAts } from './atsDetect';
-import type { EmailClassification, EmailItem, EmailSuggestion } from './emailSignals.types';
+import type { EmailClassification, EmailItem, EmailSuggestion, UnmatchedRejection } from './emailSignals.types';
 
 const MATCHABLE_STATUSES: readonly JobStatus[] = ['Saved', 'Applied', 'Interviewing', 'Offer'];
 
@@ -381,4 +381,30 @@ export function buildSuggestions(
   }
 
   return suggestions.sort((a, b) => timestamp(b.date) - timestamp(a.date));
+}
+
+export function findUnmatchedRejections(
+  items: EmailItem[],
+  jobs: JobRecord[],
+  opts: { dismissedIds?: string[]; knownThreadJobIds?: Record<string, string> } = {}
+): UnmatchedRejection[] {
+  const dismissed = new Set(opts.dismissedIds ?? []);
+  const newestFirst = [...items].sort((a, b) => timestamp(b.date) - timestamp(a.date));
+  const unmatched: UnmatchedRejection[] = [];
+
+  for (const item of newestFirst) {
+    if (dismissed.has(item.id)) continue;
+    const classification = classifyEmail(item);
+    if (classification.status !== 'Rejected') continue;
+    if (matchEmailToJobs(item, jobs, opts.knownThreadJobIds) !== null) continue;
+    unmatched.push({
+      messageId: item.id,
+      subject: item.subject,
+      sender: parseSenderLabel(item.from),
+      date: item.date,
+      reason: classification.reason,
+    });
+  }
+
+  return unmatched;
 }
