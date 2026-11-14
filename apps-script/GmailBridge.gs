@@ -21,10 +21,11 @@ const QUERY_FILTERS =
   '-in:chats -category:promotions ' +
   '(from:(greenhouse-mail.io OR greenhouse.io OR lever.co OR hire.lever.co OR myworkday.com OR ' +
   'ashbyhq.com OR smartrecruiters.com OR icims.com OR jobvite.com OR workablemail.com OR ' +
-  'bamboohr.com OR rippling.com) OR subject:(application OR applying OR interview OR candidacy OR offer OR "next steps"))';
+  'bamboohr.com OR rippling.com) OR subject:(application OR applying OR interview OR candidacy OR offer OR "next steps") OR ' +
+  '"thank you for your interest" OR "another candidate" OR "other candidates")';
 
-const MAX_THREADS = 100;
-const MAX_MESSAGES = 200;
+const MAX_THREADS = 50;
+const MAX_MESSAGES = 100;
 const MAX_SNIPPET = 1500;
 const MAX_LINKS = 20;
 
@@ -67,24 +68,26 @@ function collectItems(days) {
   const threads = GmailApp.search(query, 0, MAX_THREADS);
   const items = [];
   for (let t = 0; t < threads.length && items.length < MAX_MESSAGES; t++) {
+    const threadId = threads[t].getId();
     const messages = threads[t].getMessages();
     // Threads list oldest first, so walk backwards to take the newest messages first.
     for (let m = messages.length - 1; m >= 0 && items.length < MAX_MESSAGES; m--) {
       const msg = messages[m];
-      const from = msg.getFrom().toLowerCase();
+      const rawFrom = msg.getFrom();
+      const from = rawFrom.toLowerCase();
       if (me && (from === me || from.indexOf('<' + me + '>') !== -1)) continue;
-      items.push(toItem(msg, threads[t].getId()));
+      items.push(toItem(msg, threadId, rawFrom));
     }
   }
   return items;
 }
 
-function toItem(msg, threadId) {
+function toItem(msg, threadId, rawFrom) {
   return {
     id: msg.getId(),
     threadId: threadId,
     date: msg.getDate().toISOString(),
-    from: msg.getFrom(),
+    from: rawFrom,
     subject: msg.getSubject(),
     snippet: (msg.getPlainBody() || '').replace(/\s+/g, ' ').trim().slice(0, MAX_SNIPPET),
     links: extractLinks(msg.getBody() || '')

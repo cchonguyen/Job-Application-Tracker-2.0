@@ -85,6 +85,63 @@ describe('classifyEmail', () => {
     expect(result.confidence).toBe('high');
   });
 
+  it('classifies the Medely rejection email as Rejected and not Interviewing', () => {
+    const email = makeEmail({
+      id: 'medely-1',
+      from: 'Medely Hiring Team <no-reply@ashbyhq.com>',
+      subject: 'Medely Update - Senior Product Manager',
+      snippet:
+        'Thank you so much for your interest in the Senior Product Manager position with Medely. The role has now been filled, and we are no longer moving forward with interviews or accepting applications.',
+    });
+    const result = classifyEmail(email);
+    expect(result.status).toBe('Rejected');
+    expect(result.status).not.toBe('Interviewing');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('classifies additional rejection phrasings and patterns even with job alert footers', () => {
+    const regret = classifyEmail(
+      makeEmail({ id: 'r1', subject: 'Application update', snippet: 'We regret to inform you that we cannot proceed.' })
+    );
+    expect(regret.status).toBe('Rejected');
+    expect(regret.confidence).toBe('high');
+
+    const closed = classifyEmail(
+      makeEmail({ id: 'r2', subject: 'Role update', snippet: 'The role has been closed and is no longer active.' })
+    );
+    expect(closed.status).toBe('Rejected');
+    expect(closed.confidence).toBe('high');
+
+    const filled = classifyEmail(
+      makeEmail({ id: 'r3', subject: 'Role update', snippet: 'We have filled the position.' })
+    );
+    expect(filled.status).toBe('Rejected');
+    expect(filled.confidence).toBe('high');
+
+    const withAlertFooter = classifyEmail(
+      makeEmail({
+        id: 'r4',
+        subject: 'Application update',
+        snippet: 'We are unable to move forward at this time. Manage your job alerts in your profile.',
+      })
+    );
+    expect(withAlertFooter.status).toBe('Rejected');
+    expect(withAlertFooter.confidence).toBe('high');
+  });
+
+  it('classifies the Habitat Health rejection email as Rejected', () => {
+    const email = makeEmail({
+      id: 'habitat-1',
+      from: 'Gelsey Azhderian <gazhderian@habitathealth.com>',
+      subject: 'Habitat Health Update',
+      snippet:
+        "Sorry about the delay. Thank you for your time and interest in Habitat Health. This was a highly competitive search, and we've decided to move forward with another candidate. We had a high volume of applicants and referrals so it was a difficult decision. ... I am sorry we couldn't move further.",
+    });
+    const result = classifyEmail(email);
+    expect(result.status).toBe('Rejected');
+    expect(result.confidence).toBe('high');
+  });
+
   it('returns no signal for unrelated mail', () => {
     expect(classifyEmail(makeEmail({ id: '1', subject: 'Lunch?', snippet: 'Are you free Tuesday?' }))).toEqual({
       status: null,
@@ -225,5 +282,47 @@ describe('buildSuggestions', () => {
       makeEmail({ id: 'm2', date: '2026-02-08T12:00:00Z', from: 'recruiting@globex.com', subject: 'Globex: schedule an interview' }),
     ];
     expect(buildSuggestions(items, jobs).map((s) => s.jobId)).toEqual(['b', 'a']);
+  });
+
+  it('matches the Medely rejection email to a tracked Senior Product Manager job', () => {
+    const jobs = [
+      makeJob({ id: 'medely-pm', company: 'Medely', jobTitle: 'Senior Product Manager', status: 'Applied' }),
+    ];
+    const items = [
+      makeEmail({
+        id: 'medely-1',
+        from: 'Medely Hiring Team <no-reply@ashbyhq.com>',
+        subject: 'Medely Update - Senior Product Manager',
+        snippet:
+          'Thank you so much for your interest in the Senior Product Manager position with Medely. The role has now been filled, and we are no longer moving forward with interviews or accepting applications.',
+      }),
+    ];
+    const suggestions = buildSuggestions(items, jobs);
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].jobId).toBe('medely-pm');
+    expect(suggestions[0].fromStatus).toBe('Applied');
+    expect(suggestions[0].toStatus).toBe('Rejected');
+    expect(suggestions[0].confidence).toBe('high');
+  });
+
+  it('matches the Habitat Health rejection email via sender domain', () => {
+    const jobs = [
+      makeJob({ id: 'habitat-pm', company: 'Habitat Health', jobTitle: 'Product Manager', status: 'Interviewing' }),
+    ];
+    const items = [
+      makeEmail({
+        id: 'habitat-1',
+        from: 'Gelsey Azhderian <gazhderian@habitathealth.com>',
+        subject: 'Habitat Health Update',
+        snippet:
+          "Sorry about the delay. Thank you for your time and interest in Habitat Health. This was a highly competitive search, and we've decided to move forward with another candidate. We had a high volume of applicants and referrals so it was a difficult decision. ... I am sorry we couldn't move further.",
+      }),
+    ];
+    const suggestions = buildSuggestions(items, jobs);
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].jobId).toBe('habitat-pm');
+    expect(suggestions[0].fromStatus).toBe('Interviewing');
+    expect(suggestions[0].toStatus).toBe('Rejected');
+    expect(suggestions[0].confidence).toBe('high');
   });
 });
