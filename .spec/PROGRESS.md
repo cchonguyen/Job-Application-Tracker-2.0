@@ -10,3 +10,4 @@
 - [x] **Slice 4.1: Sync design-system kit and Tier 3 Hydrogen updates** Target files: .harness/managed.json, package.json
 - [x] **Slice 4.1: Sync design-system kit and Tier 3 Hydrogen updates** Target files: .agents/, .harness/, AGENTS.md, plugins/harness/, package.json
 - [x] **Slice 5: Align with Harness UI v2 design system, neon-cyan accent, dark-mode contrast, modals, and Plain voice** `[UI / VISUAL]` Target files: `design-system/`, `docs/DESIGN_SYSTEM.md`, `AGENTS.md`, `PRD.md`, `package.json`, `index.html`, `public/favicon.svg`, `src/` | Verify: npm run typecheck --silent && npm run lint --silent && npx vitest run --reporter=dot
+- [ ] **Slice 7** [IN_PROGRESS] `[CORE / DATA]`: Split GmailBridge search into flat groups — Target files: `apps-script/GmailBridge.gs`, `src/lib/__tests__/gmailBridge.test.ts`, `package.json`, `.spec/PROGRESS.md` | Verify: npm run typecheck --silent && npm run lint --silent && npx vitest run --reporter=dot

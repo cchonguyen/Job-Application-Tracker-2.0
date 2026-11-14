@@ -17,15 +17,18 @@
  */
 
 // Edit these to change which emails are included. The days window is added in front.
-const QUERY_FILTERS =
-  '-in:chats -category:promotions ' +
-  '(from:(greenhouse-mail.io OR greenhouse.io OR lever.co OR hire.lever.co OR myworkday.com OR ' +
-  'ashbyhq.com OR smartrecruiters.com OR icims.com OR jobvite.com OR workablemail.com OR ' +
-  'bamboohr.com OR rippling.com) OR subject:(application OR applying OR interview OR candidacy OR offer OR "next steps") OR ' +
-  '"thank you for your interest" OR "another candidate" OR "other candidates")';
+// Split into flat groups because Gmail's query parser can drop terms in nested (from:(...) OR subject:(...) OR "...") queries.
+const BASE_FILTERS = '-in:chats -category:promotions';
+const SEARCH_GROUPS = [
+  'from:(greenhouse-mail.io OR greenhouse.io OR lever.co OR hire.lever.co OR myworkday.com OR ' +
+    'ashbyhq.com OR smartrecruiters.com OR icims.com OR jobvite.com OR workablemail.com OR ' +
+    'bamboohr.com OR rippling.com)',
+  'subject:(application OR applying OR interview OR candidacy OR offer OR "next steps")',
+  '("thank you for your interest" OR "another candidate" OR "other candidates")',
+];
 
-const MAX_THREADS = 50;
-const MAX_MESSAGES = 100;
+const MAX_THREADS = 100;
+const MAX_MESSAGES = 150;
 const MAX_SNIPPET = 1500;
 const MAX_LINKS = 20;
 
@@ -62,10 +65,29 @@ function parseDays(raw) {
   return Math.min(60, Math.max(1, n));
 }
 
+function collectThreads(days) {
+  const prefix = 'newer_than:' + days + 'd ' + BASE_FILTERS + ' ';
+  const seen = {};
+  const threads = [];
+  for (let g = 0; g < SEARCH_GROUPS.length; g++) {
+    const batch = GmailApp.search(prefix + SEARCH_GROUPS[g], 0, MAX_THREADS);
+    for (let i = 0; i < batch.length; i++) {
+      const id = batch[i].getId();
+      if (!seen[id]) {
+        seen[id] = true;
+        threads.push(batch[i]);
+      }
+    }
+  }
+  threads.sort(function (a, b) {
+    return b.getLastMessageDate().getTime() - a.getLastMessageDate().getTime();
+  });
+  return threads.slice(0, MAX_THREADS);
+}
+
 function collectItems(days) {
   const me = (Session.getActiveUser().getEmail() || '').toLowerCase();
-  const query = 'newer_than:' + days + 'd ' + QUERY_FILTERS;
-  const threads = GmailApp.search(query, 0, MAX_THREADS);
+  const threads = collectThreads(days);
   const items = [];
   for (let t = 0; t < threads.length && items.length < MAX_MESSAGES; t++) {
     const threadId = threads[t].getId();
