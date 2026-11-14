@@ -96,7 +96,7 @@ The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dis
    - Leave the production branch as `main`. Every push to `main` then builds and deploys.
 3. Worker → **Settings** → **Variables and Secrets**, add each as type **Secret** (secrets always survive deploys; `keep_vars` in `wrangler.toml` also keeps plain-text ones):
    - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID`, `EXTRACTION_DAILY_LIMIT`, and `ALLOWED_USER_EMAILS`. `NODE_ENV` comes from `wrangler.toml`.
-4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate.
+4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate. (`workers_dev` and `preview_urls` are `false` in `wrangler.toml` so the Worker is only reachable via the custom domain.)
 5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins**, and Firebase **Authorized domains** (see above).
 
 `WORKERS_CI_COMMIT_SHA` is set by Cloudflare's build and feeds the version line in the Settings menu. Logs: Worker → **Observability**.
