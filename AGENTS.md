@@ -12,6 +12,7 @@ The docs are the source of truth for what the app does and how it is meant to wo
 | `docs/DESIGN_SYSTEM.md` | Visual language and product voice: color tokens, accents, dark mode, status colors, type, spacing, component patterns, copy rules. Exportable to new apps |
 | `AGENTS.md` | How to work on this repo (this file) |
 | `.spec/` | Harness state: short overview, scope contract, decisions log, and the single-slice progress lock |
+| `design-system/profile.md` | App-specific Harness UI overrides, signature hue (`neon-cyan`), density, voice warmth, and status state table |
 
 When making a change:
 - Find every statement in those files that the change makes untrue, and fix it. A new route, env var, status, field, limit or product rule gets a line in the table or section that lists its kind.
@@ -39,6 +40,10 @@ This repo uses the claude-harness-hub harness (version in `.harness-version`). `
 - `.claude/` holds the slash commands (`/triage`, `/spec`, `/implement`, `/learn`, `/prep-audit`, `/ingest-feedback`, `/sync-harness`), subagents and hook settings. `.harness/` holds the Node hooks and scripts they run.
 - Do not edit `.claude/` or `.harness/` here by hand. Change them in claude-harness-hub and run `/sync-harness` (with that repo attached to the session) to pull them in.
 - `.spec/PROGRESS.md` sets the work mode: no `[IN_PROGRESS]` line means edit freely; one means only that slice's target files may change.
+
+## Design System
+
+UI follows Harness UI. Read its `README.md`, `voice.md`, `principles.md`, and this project's `design-system/profile.md` before changing a screen. Never edit `tokens.css` or `bundle.css` directly.
 
 <!-- >>> harness >>> -->
 ## Harness Sector 000 Card Catalog (Falcon Protocol)
