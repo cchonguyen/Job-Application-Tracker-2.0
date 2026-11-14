@@ -1,7 +1,7 @@
 {
   "name": "job-application-tracker",
   "private": true,
-  "version": "0.10.1",
+  "version": "0.10.2",
   "packageManager": "bun@1.4.4",
   "type": "module",
   "scripts": {

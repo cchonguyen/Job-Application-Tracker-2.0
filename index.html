@@ -37,8 +37,9 @@
         try {
           var raw = localStorage.getItem('jat-theme');
           var theme = raw ? JSON.parse(raw) : { mode: 'light', accent: 'cyan' };
-          var mode = theme.mode === 'dark' ? 'dark' : 'light';
-          var accents = { cyan: 1, indigo: 1, teal: 1, amber: 1, rose: 1, emerald: 1 };
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var mode = theme.mode === 'dark' || (theme.mode === 'system' && prefersDark) ? 'dark' : 'light';
+          var accents = { cyan: 1, emerald: 1, amber: 1, rose: 1, indigo: 1 };
           var accent = accents[theme.accent] ? theme.accent : 'cyan';
           document.documentElement.dataset.mode = mode;
           document.documentElement.dataset.theme = mode;

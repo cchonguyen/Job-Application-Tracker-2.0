@@ -1,6 +1,6 @@
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
-export type ThemeAccent = 'cyan' | 'teal' | 'emerald' | 'amber' | 'rose' | 'indigo';
+export type ThemeAccent = 'cyan' | 'emerald' | 'amber' | 'rose' | 'indigo';
 
 export interface ThemePreference {
   mode: ThemeMode;
@@ -12,11 +12,11 @@ export const THEME_STORAGE_KEY = 'jat-theme';
 export const THEME_MODES: { id: ThemeMode; label: string }[] = [
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
+  { id: 'system', label: 'System' },
 ];
 
 export const THEME_ACCENTS: { id: ThemeAccent; label: string; swatch: string }[] = [
   { id: 'cyan', label: 'Cyan', swatch: 'oklch(50.3% 0.095 210.8)' },
-  { id: 'teal', label: 'Teal', swatch: 'oklch(60% 0.118 184.704)' },
   { id: 'emerald', label: 'Emerald', swatch: 'oklch(59.6% 0.145 163.225)' },
   { id: 'amber', label: 'Amber', swatch: 'oklch(66.6% 0.179 58.318)' },
   { id: 'rose', label: 'Rose', swatch: 'oklch(58.6% 0.253 17.585)' },
@@ -29,18 +29,26 @@ export const DEFAULT_THEME: ThemePreference = {
 };
 
 export function isThemeMode(value: unknown): value is ThemeMode {
-  return value === 'light' || value === 'dark';
+  return value === 'light' || value === 'dark' || value === 'system';
 }
 
 export function isThemeAccent(value: unknown): value is ThemeAccent {
   return (
     value === 'cyan' ||
     value === 'indigo' ||
-    value === 'teal' ||
     value === 'amber' ||
     value === 'rose' ||
     value === 'emerald'
   );
+}
+
+export function resolveThemeMode(mode: ThemeMode, prefersDark?: boolean): 'light' | 'dark' {
+  if (mode !== 'system') return mode;
+  if (typeof prefersDark === 'boolean') return prefersDark ? 'dark' : 'light';
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return 'light';
 }
 
 export function parseThemePreference(raw: string | null | undefined): ThemePreference {
@@ -74,9 +82,14 @@ export function saveThemePreference(theme: ThemePreference): void {
   }
 }
 
-export function applyTheme(theme: ThemePreference, root: HTMLElement = document.documentElement): void {
-  root.dataset.mode = theme.mode;
-  root.dataset.theme = theme.mode;
+export function applyTheme(
+  theme: ThemePreference,
+  root: HTMLElement = document.documentElement,
+  prefersDark?: boolean
+): void {
+  const resolvedMode = resolveThemeMode(theme.mode, prefersDark);
+  root.dataset.mode = resolvedMode;
+  root.dataset.theme = resolvedMode;
   root.dataset.accent = theme.accent;
-  root.style.colorScheme = theme.mode;
+  root.style.colorScheme = resolvedMode;
 }
