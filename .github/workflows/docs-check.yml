@@ -18,4 +18,5 @@ jobs:
       - name: Require docs to change with the code
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: node scripts/check-docs-updated.mjs origin/${{ github.base_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: node scripts/check-docs-updated.mjs "origin/$BASE_REF"

@@ -99,7 +99,7 @@ declare
   today date := (now() at time zone 'utc')::date;
   used integer;
 begin
-  if uid is null then
+  if uid is null or p_limit <= 0 or p_kind not in ('extraction', 'company-facts') then
     return false;
   end if;
   insert into public.daily_usage as u (user_id, kind, day, count)

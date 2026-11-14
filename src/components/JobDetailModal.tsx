@@ -37,6 +37,16 @@ interface JobDetailModalProps {
   onUpdateDateApplied: (id: string, dateApplied: string | null) => Promise<void>;
 }
 
+function safeExternalUrl(raw?: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function formatHistoryTime(iso: string): string {
   try {
     const d = new Date(iso);
@@ -97,6 +107,7 @@ export const JobDetailModal = ({
   const statusMeta = job ? getStatusMeta(job.status) : null;
   const StatusIcon = statusMeta?.icon;
   const history = job ? normalizeStatusHistory(job.statusHistory) : [];
+  const safeJobUrl = safeExternalUrl(job?.url);
 
   const handleNotesSave = async () => {
     if (!job) return;
@@ -270,9 +281,9 @@ export const JobDetailModal = ({
                       <Bookmark className="w-3.5 h-3.5" />
                       Set up 1-Click Capture
                     </button>
-                    {job.url && (
+                    {safeJobUrl && (
                       <a
-                        href={job.url}
+                        href={safeJobUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-medium text-amber-900 hover:text-amber-950 underline underline-offset-2 ml-1"
@@ -505,16 +516,16 @@ export const JobDetailModal = ({
               </div>
 
               {/* Original Link */}
-              {job.url && (
+              {safeJobUrl && (
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs gap-2">
                   <span className="text-slate-500 shrink-0">Original Listing:</span>
                   <a
-                    href={job.url}
+                    href={safeJobUrl}
                     target="_blank"
                     rel="noreferrer noopener"
                     className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-medium underline truncate"
                   >
-                    <span className="truncate">{(() => { try { return new URL(job.url).hostname; } catch { return job.url; } })()}</span>
+                    <span className="truncate">{(() => { try { return new URL(safeJobUrl).hostname; } catch { return safeJobUrl; } })()}</span>
                     <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                   </a>
                 </div>

@@ -54,7 +54,7 @@ export function cleanCompanyName(rawUrl: string, ogSiteName?: string, text?: str
       if (account) return slugToCompanyName(account);
     }
 
-    // Workday path: /en-US/EnsembleHealthPartnersCareers/job/...
+    // Workday path: /en-US/InitechHealthPartnersCareers/job/...
     const workdayMatch = parsedUrl.pathname.match(/\/([A-Za-z]+)(?:Careers|Jobs)?\/job\//i);
     if (workdayMatch && workdayMatch[1]) {
       return workdayMatch[1].replace(/([a-z])([A-Z])/g, '$1 $2').trim();

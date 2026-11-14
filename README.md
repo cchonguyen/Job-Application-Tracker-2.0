@@ -61,7 +61,7 @@ Upgrading a database created before v0.6.0? Follow [`docs/MIGRATIONS.md`](docs/M
 
 ### Google Sheets sync (optional)
 
-Sheets sync runs in the browser with its own Google OAuth client, set in [`firebase-applet-config.json`](firebase-applet-config.json) (`oAuthClientId` plus the Firebase project fields). On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud and to the Firebase project's **Authentication → Settings → Authorized domains**. See PRD 4.6 for how sync behaves.
+Sheets sync runs in the browser using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in [`firebase-applet-config.json`](firebase-applet-config.json) if populated). On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud (and to Firebase **Authentication → Settings → Authorized domains** if using optional Firebase config). See PRD 4.6 for how sync behaves.
 
 ### Gmail status suggestions (optional, owner only)
 
@@ -70,7 +70,8 @@ Deploy [`apps-script/GmailBridge.gs`](apps-script/GmailBridge.gs) as a web app i
 ### Security notes
 
 - The server queries Postgres as the signed-in user, so the row-level security policies in `schema.sql` are what keep accounts apart.
-- Each user can add `EXTRACTION_DAILY_LIMIT` jobs by link or pasted text per day (default 30), since each one can spend Gemini quota. The counts are kept in Supabase (`daily_usage`), so they hold on Cloudflare too.
+- Set `ALLOWED_USER_EMAILS` (comma-separated emails) to restrict API access to specific Google accounts; leave it empty to allow any Google account.
+- Each user can add `EXTRACTION_DAILY_LIMIT` jobs by link or pasted text per day (default 30), since each one can spend Gemini quota. The counts are kept in Supabase (`daily_usage`), so they hold on Cloudflare too, and `take_daily_usage` validates counter kinds and limits.
 - Job links are fetched only if they resolve to public addresses; private, loopback and cloud-metadata addresses are refused, including via redirects.
 
 ## Scripts
@@ -94,8 +95,8 @@ The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dis
    - **Deploy command:** `npx wrangler deploy`
    - Leave the production branch as `main`. Every push to `main` then builds and deploys.
 3. Worker → **Settings** → **Variables and Secrets**, add each as type **Secret** (secrets always survive deploys; `keep_vars` in `wrangler.toml` also keeps plain-text ones):
-   - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID` and `EXTRACTION_DAILY_LIMIT`. `NODE_ENV` comes from `wrangler.toml`.
-4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate.
+   - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID`, `EXTRACTION_DAILY_LIMIT`, and `ALLOWED_USER_EMAILS`. `NODE_ENV` comes from `wrangler.toml`.
+4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate. (`workers_dev` and `preview_urls` are `false` in `wrangler.toml` so the Worker is only reachable via the custom domain.)
 5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins**, and Firebase **Authorized domains** (see above).
 
 `WORKERS_CI_COMMIT_SHA` is set by Cloudflare's build and feeds the version line in the Settings menu. Logs: Worker → **Observability**.
@@ -118,6 +119,7 @@ Environment variables:
 - `SUPABASE_ANON_KEY` = Supabase **anon / publishable** key. Required in production: the API returns 503 without Supabase.
 - `GOOGLE_OAUTH_CLIENT_ID` = optional; the Google client ID from Supabase's Google provider, so sign-in shows your app's name
 - `EXTRACTION_DAILY_LIMIT` = optional per-user daily extraction limit (default 30)
+- `ALLOWED_USER_EMAILS` = optional comma-separated Google account emails allowed to call `/api`
 
 `PORT` and `RENDER_GIT_COMMIT` are set by Render automatically; the commit feeds the version line in the Settings menu.
 

@@ -48,7 +48,7 @@ const COMPANY_STOP_WORDS = new Set([
 
 /**
  * Normalizes a company name for fuzzy duplicate comparison.
- * e.g., "Stripe, Inc." -> "stripe", "Veeva Systems" -> "veeva"
+ * e.g., "Stripe, Inc." -> "stripe", "Globex Systems" -> "globex"
  */
 export function normalizeCompany(name?: string | null): string {
   if (!name) return '';
