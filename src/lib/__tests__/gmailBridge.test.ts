@@ -89,6 +89,7 @@ function loadBridge(overrides?: {
 
   return {
     searchSpy,
+    doGet: context.doGet as (e?: { parameter?: Record<string, string> }) => string,
     collectThreads: context.collectThreads as (days: number) => MockThread[],
     collectItems: context.collectItems as (days: number) => Array<{
       id: string;
@@ -178,5 +179,16 @@ describe('GmailBridge.gs', () => {
         links: ['https://example.com/apply?a=1&b=2'],
       },
     ]);
+  });
+
+  it('returns version 3 in doGet response', () => {
+    const { doGet } = loadBridge({ bridgeKey: 'secret-key' });
+    const raw = doGet({ parameter: { key: 'secret-key', days: '14' } });
+    const parsed = JSON.parse(raw);
+    expect(parsed).toEqual({
+      ok: true,
+      version: 3,
+      items: [],
+    });
   });
 });

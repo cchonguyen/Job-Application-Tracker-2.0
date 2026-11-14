@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JobRecord, JobStatus } from '../../types';
-import { buildSuggestions, classifyEmail, matchEmailToJobs } from '../emailSignals';
+import { buildSuggestions, classifyEmail, findUnmatchedRejections, matchEmailToJobs } from '../emailSignals';
 import type { EmailItem } from '../emailSignals.types';
 
 function makeJob(
@@ -324,5 +324,64 @@ describe('buildSuggestions', () => {
     expect(suggestions[0].fromStatus).toBe('Interviewing');
     expect(suggestions[0].toStatus).toBe('Rejected');
     expect(suggestions[0].confidence).toBe('high');
+  });
+});
+
+describe('findUnmatchedRejections', () => {
+  it('returns rejection emails that do not match any open job, sorted newest first', () => {
+    const jobs = [makeJob({ id: 'a', company: 'Acme', jobTitle: 'Engineer', status: 'Applied' })];
+    const items = [
+      makeEmail({
+        id: 'u1',
+        date: '2026-02-01T12:00:00Z',
+        from: '"Beta Recruiting" <no-reply@ashbyhq.com>',
+        subject: 'Beta Update',
+        snippet: 'Unfortunately, we are not moving forward with your application.',
+      }),
+      makeEmail({
+        id: 'matched',
+        date: '2026-02-05T12:00:00Z',
+        from: 'recruiting@acme.com',
+        subject: 'Acme Update',
+        snippet: 'Unfortunately, we are not moving forward.',
+      }),
+      makeEmail({
+        id: 'interview',
+        date: '2026-02-06T12:00:00Z',
+        from: 'recruiting@gamma.com',
+        subject: 'Gamma: schedule an interview',
+      }),
+      makeEmail({
+        id: 'u2',
+        date: '2026-02-08T12:00:00Z',
+        from: '"Delta Team" <jobs@delta.io>',
+        subject: 'Delta Application',
+        snippet: 'We have decided to move forward with another candidate.',
+      }),
+    ];
+
+    const unmatched = findUnmatchedRejections(items, jobs);
+    expect(unmatched).toHaveLength(2);
+    expect(unmatched.map((u) => u.messageId)).toEqual(['u2', 'u1']);
+    expect(unmatched[0]).toMatchObject({
+      messageId: 'u2',
+      subject: 'Delta Application',
+      sender: 'Delta Team',
+      date: '2026-02-08T12:00:00Z',
+    });
+    expect(unmatched[0].reason).toBeTruthy();
+  });
+
+  it('excludes dismissed message ids', () => {
+    const jobs = [makeJob({ id: 'a', company: 'Acme', jobTitle: 'Engineer', status: 'Applied' })];
+    const items = [
+      makeEmail({
+        id: 'u1',
+        from: 'jobs@beta.io',
+        subject: 'Beta Update',
+        snippet: 'Unfortunately, we are not moving forward.',
+      }),
+    ];
+    expect(findUnmatchedRejections(items, jobs, { dismissedIds: ['u1'] })).toEqual([]);
   });
 });

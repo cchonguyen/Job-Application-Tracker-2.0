@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Mail, X, Check, RefreshCw, ArrowRight, AlertTriangle } from 'lucide-react';
 import type { JobStatus } from '../types';
-import type { EmailSuggestion } from '../lib/emailSignals.types';
+import type { EmailSuggestion, UnmatchedRejection } from '../lib/emailSignals.types';
 import { apiFetch } from '../lib/apiClient';
 import { getStatusMeta } from '../lib/statusMeta';
 
@@ -36,7 +36,13 @@ type LoadState =
   | { kind: 'loading' }
   | { kind: 'disabled' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; scanned: number; suggestions: EmailSuggestion[] };
+  | {
+      kind: 'ready';
+      scanned: number;
+      bridgeVersion: number | null;
+      suggestions: EmailSuggestion[];
+      unmatchedRejections: UnmatchedRejection[];
+    };
 
 /** Suggested status changes from recent Gmail, read through the owner's Apps Script bridge. Nothing changes until the user clicks Apply. */
 export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggestionsModalProps) => {
@@ -54,7 +60,11 @@ export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggest
       setState({
         kind: 'ready',
         scanned: body.scanned ?? 0,
+        bridgeVersion: typeof body.bridgeVersion === 'number' ? body.bridgeVersion : null,
         suggestions: (body.suggestions as EmailSuggestion[]).filter((s) => !dismissed.has(s.messageId)),
+        unmatchedRejections: Array.isArray(body.unmatchedRejections)
+          ? (body.unmatchedRejections as UnmatchedRejection[])
+          : [],
       });
     } catch {
       setState({ kind: 'error', message: 'Could not reach the tracker' });
@@ -193,7 +203,32 @@ export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggest
               })}
             </ul>
           )}
+          {state.kind === 'ready' && state.unmatchedRejections.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <p className="text-xs font-medium text-slate-500">
+                Unmatched rejection emails ({state.unmatchedRejections.length})
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {state.unmatchedRejections.map((u) => (
+                  <li key={u.messageId} className="rounded border border-slate-100 bg-slate-50/70 px-2.5 py-1.5 text-xs">
+                    <div className="truncate font-medium text-slate-600" title={u.subject}>
+                      {u.subject || '(No subject)'}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      {u.sender}
+                      {u.date ? ` · ${new Date(u.date).toLocaleDateString()}` : ''}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
+        {state.kind === 'ready' && (
+          <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
+            Scanned {state.scanned} recent emails · {state.bridgeVersion ? `Bridge v${state.bridgeVersion}` : 'Bridge pre-v3'}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

@@ -43,3 +43,11 @@ export interface EmailSuggestion {
   sender: string;
   date: string;
 }
+
+export interface UnmatchedRejection {
+  messageId: string;
+  subject: string;
+  sender: string;
+  date: string;
+  reason: string;
+}
