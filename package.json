@@ -1,7 +1,8 @@
 {
   "name": "job-application-tracker",
   "private": true,
-  "version": "0.10.0",
+  "version": "0.10.1",
+  "packageManager": "bun@1.4.4",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
