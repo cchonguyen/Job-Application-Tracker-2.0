@@ -94,7 +94,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Suggestions only move a job forward (Saved → Applied → Interviewing → Offer), or to Rejected from any open status. They never suggest Accepted or Declined, never create jobs, and never touch the captured job details, so the snapshot and duplicate rules are unaffected.
 
 ### 4.8 Appearance (`src/lib/theme.ts`, `src/index.css`)
-- Light and dark mode plus six accent colors (`cyan` / `neon-cyan` default `#0b7285`, `teal`, `emerald`, `amber`, `rose`, and `indigo`), chosen in the Settings menu and saved in the browser (`jat-theme`). The saved theme is applied before first paint with both `data-mode` and `data-theme` synced on `<html>`.
+- Light, dark, and system appearance modes (defaulting to `light`, with `system` following OS `prefers-color-scheme`) plus five accent colors (`cyan` / `neon-cyan` default `#0b7285`, `emerald`, `amber`, `rose`, and `indigo`), chosen in the Theme menu and saved in the browser (`jat-theme`). The saved theme is applied before first paint with both `data-mode` and `data-theme` synced on `<html>`.
 - Status colors are fixed per status and never follow the accent; they are defined once in `src/lib/statusMeta.ts`.
 - The project's Harness UI profile lives in [`design-system/profile.md`](design-system/profile.md) and the full design language and voice rules live in `docs/DESIGN_SYSTEM.md`.
 

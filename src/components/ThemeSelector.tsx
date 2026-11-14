@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Moon, Palette, Sun } from 'lucide-react';
+import { Check, Monitor, Moon, Palette, Sun } from 'lucide-react';
 import { THEME_ACCENTS, THEME_MODES, type ThemeAccent, type ThemeMode } from '../lib/theme';
+
+const MODE_ICONS = {
+  light: Sun,
+  dark: Moon,
+  system: Monitor,
+} as const;
 
 interface ThemeSelectorProps {
   mode: ThemeMode;
@@ -54,16 +60,16 @@ export function ThemeSelector({ mode, accent, onModeChange, onAccentChange }: Th
           className="absolute right-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-50 animate-in fade-in slide-in-from-top-1 duration-100"
         >
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Appearance</p>
-          <div className="grid grid-cols-2 gap-1.5 mb-3">
+          <div className="grid grid-cols-3 gap-1.5 mb-3">
             {THEME_MODES.map((option) => {
               const selected = mode === option.id;
-              const Icon = option.id === 'light' ? Sun : Moon;
+              const Icon = MODE_ICONS[option.id];
               return (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onModeChange(option.id)}
-                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
                     selected
                       ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'

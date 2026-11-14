@@ -20,7 +20,7 @@ The app is a quiet, dense work tool. It should feel like a well-kept spreadsheet
 |---|---|
 | **Calm by default** | Neutral slate surfaces carry almost everything. Color is reserved for meaning (status, accent, warnings), so it stays legible. |
 | **Dense, not cramped** | Small type (`text-xs`) and tight spacing fit a whole pipeline on one screen. Generous radius and soft borders keep it from feeling crowded. |
-| **One accent, chosen by the user** | Interactive elements share a single accent hue. The user can switch it (six options, defaulting to `cyan`); the app never hard-codes a brand color into a component. |
+| **One accent, chosen by the user** | Interactive elements share a single accent hue. The user can switch it (five options, defaulting to `cyan`); the app never hard-codes a brand color into a component. |
 | **Meaning never depends on the accent** | Status and warning colors come from fixed hues outside the accent scale, so "Interviewing" looks the same under every accent and in both modes. |
 | **Color is never the only signal** | Every status pairs a hue with an icon and a text label. |
 | **Honest data** | The UI shows what is known and marks what is not. Missing values read `Unknown` or `Not listed`; nothing is filled with plausible defaults. |
@@ -62,12 +62,11 @@ Slate is the whole interface: backgrounds, borders, text. Common roles:
 
 ### 3.2 Accent (user-selectable)
 
-Components always write `indigo-*` for accent color. `src/index.css` redefines the `--color-indigo-50` to `--color-indigo-950` variables per `data-accent` attribute on `<html>`, so `bg-indigo-600` becomes cyan (default), teal, emerald, amber, rose, or indigo when the user picks one. Nothing else in the UI may use `indigo-*` for a non-accent meaning.
+Components always write `indigo-*` for accent color. `src/index.css` redefines the `--color-indigo-50` to `--color-indigo-950` variables per `data-accent` attribute on `<html>`, so `bg-indigo-600` becomes cyan (default), emerald, amber, rose, or indigo when the user picks one. Nothing else in the UI may use `indigo-*` for a non-accent meaning.
 
 | Accent | id | 600 step (primary) |
 |---|---|---|
 | Cyan (`neon-cyan`, default) | `cyan` | `oklch(50.3% 0.095 210.8)` (`#0b7285` light / `#4fd8eb` dark) |
-| Teal | `teal` | `oklch(60% 0.118 184.704)` |
 | Emerald | `emerald` | `oklch(59.6% 0.145 163.225)` |
 | Amber | `amber` | `oklch(66.6% 0.179 58.318)` |
 | Rose | `rose` | `oklch(58.6% 0.253 17.585)` |
@@ -86,7 +85,7 @@ Each accent is a full 11-step scale (50 to 950) taken from the matching palette.
 
 ### 3.3 Dark mode
 
-Dark mode is a remap, not a second set of classes. `src/lib/theme.ts` and the pre-paint script in `index.html` keep both `data-mode` and `data-theme` synced on `<html>` (defaulting to `light`), alongside `data-accent`. With `data-mode="dark"` on `<html>`:
+Dark mode is a remap, not a second set of classes. `src/lib/theme.ts` and the pre-paint script in `index.html` resolve `system` via `prefers-color-scheme` and keep both `data-mode` and `data-theme` synced on `<html>` (`light` or `dark`, defaulting to `light`), alongside `data-accent`. With `data-mode="dark"` on `<html>`:
 
 - The slate scale is inverted (`slate-50` becomes the darkest surface, `slate-900` the lightest text), all on a cool blue-gray hue (oklch hue about 255 to 265).
 - `--color-white` becomes a dark surface (`oklch(22% 0.03 265)`), so `bg-white` cards stay cards.
@@ -253,8 +252,8 @@ Files a new app copies to get the same theme working:
 
 | Copy from this repo | What it gives you |
 |---|---|
-| `src/index.css` | The six accent palettes, dark mode pastel/ink remap, `.jat-scrim`, `.jat-tooltip`, `.jat-toast-container`, entrance animations, white-text fix, and theme fade |
-| `design-system/profile.md` | Harness UI profile declaring `neon-cyan` signature hue, dual-theme mode, density, display font override, `Plain` voice, and state map |
+| `src/index.css` | The five accent palettes, dark mode pastel/ink remap, `.jat-scrim`, `.jat-tooltip`, `.jat-toast-container`, entrance animations, white-text fix, and theme fade |
+| `design-system/profile.md` | Harness UI profile declaring `neon-cyan` signature hue, light/dark/system modes, density, display font override, `Plain` voice, and state map |
 | `src/lib/theme.ts` | Mode and accent types, the accent list with swatches, load/save/apply helpers (storage key `jat-theme`; rename it for the new app) |
 | The inline `<script>` in `index.html` `<body>` | Applies the saved theme before first paint, so there is no flash of the wrong theme. Its accent list must match `THEME_ACCENTS` |
 | `src/components/ThemeSelector.tsx` | Mode toggle and accent swatches for a settings menu |

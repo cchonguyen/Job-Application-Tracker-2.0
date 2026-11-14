@@ -14,6 +14,18 @@ export function useTheme() {
   useEffect(() => {
     applyTheme(theme);
     saveThemePreference(theme);
+
+    if (theme.mode !== 'system' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      applyTheme(theme, document.documentElement, event.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
 
   const setMode = useCallback((mode: ThemeMode) => {
