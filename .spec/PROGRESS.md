@@ -7,3 +7,5 @@
 - [x] **Slice 2** `[CORE / DATA]`: Centralize status colors in STATUS_META and guard the accent list against drift — Target files: `src/lib/statusMeta.ts`, `src/lib/formatHelpers.ts`, `src/components/HeaderActionPanel.tsx`, `src/lib/__tests__/designTokens.test.ts` | Verify: npm run lint --silent && npx vitest run --reporter=dot
 - [x] **Slice 3** `[UI / VISUAL]`: Write the design system export doc and link it from the docs — Target files: `docs/DESIGN_SYSTEM.md`, `AGENTS.md`, `PRD.md`, `package.json` | Verify: npm run lint --silent
 - [x] **Slice 4** `[UI / VISUAL]`: Bump version to 0.9.2 for the design system export — Target files: `package.json` | Verify: npm run lint --silent
+- [x] **Slice 4.1: Sync design-system kit and Tier 3 Hydrogen updates** Target files: .harness/managed.json, package.json
+- [x] **Slice 4.1: Sync design-system kit and Tier 3 Hydrogen updates** Target files: .agents/, .harness/, AGENTS.md, plugins/harness/, package.json
