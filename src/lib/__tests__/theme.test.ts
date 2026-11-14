@@ -11,8 +11,10 @@ describe('theme preference helpers', () => {
     expect(isThemeMode('light')).toBe(true);
     expect(isThemeMode('dark')).toBe(true);
     expect(isThemeMode('auto')).toBe(false);
+    expect(isThemeAccent('cyan')).toBe(true);
     expect(isThemeAccent('teal')).toBe(true);
     expect(isThemeAccent('purple')).toBe(false);
+    expect(DEFAULT_THEME.accent).toBe('cyan');
   });
 
   it('parses stored preferences with defaults for bad values', () => {

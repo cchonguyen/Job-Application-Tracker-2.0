@@ -13,14 +13,13 @@ import {
   RotateCcw,
   Copy,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { JobRecord, JobStatus } from '../../types';
 import {
   formatMicroSalary,
   getCompactTimeline,
   getCleanCityLocation,
   getWorkArrangementMeta,
-  getStatusDotColor,
 } from '../../lib/formatHelpers';
 import { STATUS_ORDER, getStatusMeta } from '../../lib/statusMeta';
 import { CompanyLogo } from '../CompanyLogo';
@@ -207,7 +206,6 @@ export const SpreadsheetRow = ({
             const isCurrent = job.status === status;
             const meta = getStatusMeta(status);
             const ItemIcon = meta.icon;
-            const dotColor = getStatusDotColor(status);
 
             return (
               <button
@@ -399,7 +397,7 @@ export const SpreadsheetRow = ({
               className="w-full px-3 py-1.5 text-xs text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5 text-slate-400" />
-              <span>{copiedUrl ? 'Copied URL!' : 'Copy Link'}</span>
+              <span>{copiedUrl ? 'Copied URL' : 'Copy Link'}</span>
             </button>
           )}
 

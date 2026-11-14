@@ -7,7 +7,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="theme-color" content="#0b7285" />
     <meta name="description" content="Autonomous job application tracking assistant that scrapes job postings, extracts structured attributes, and manages them in a persistent spreadsheet." />
     <meta property="og:title" content="Job Application Easy Tracker" />
     <meta property="og:description" content="Autonomous job application tracking assistant that scrapes job postings, extracts structured attributes, and manages them in a persistent spreadsheet." />
@@ -36,16 +36,18 @@
       (function () {
         try {
           var raw = localStorage.getItem('jat-theme');
-          var theme = raw ? JSON.parse(raw) : { mode: 'light', accent: 'indigo' };
+          var theme = raw ? JSON.parse(raw) : { mode: 'light', accent: 'cyan' };
           var mode = theme.mode === 'dark' ? 'dark' : 'light';
-          var accents = { indigo: 1, teal: 1, amber: 1, rose: 1, emerald: 1 };
-          var accent = accents[theme.accent] ? theme.accent : 'indigo';
+          var accents = { cyan: 1, indigo: 1, teal: 1, amber: 1, rose: 1, emerald: 1 };
+          var accent = accents[theme.accent] ? theme.accent : 'cyan';
           document.documentElement.dataset.mode = mode;
+          document.documentElement.dataset.theme = mode;
           document.documentElement.dataset.accent = accent;
           document.documentElement.style.colorScheme = mode;
         } catch (e) {
           document.documentElement.dataset.mode = 'light';
-          document.documentElement.dataset.accent = 'indigo';
+          document.documentElement.dataset.theme = 'light';
+          document.documentElement.dataset.accent = 'cyan';
         }
       })();
     </script>

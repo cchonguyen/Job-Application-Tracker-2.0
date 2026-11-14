@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Mail, X, Check, RefreshCw, ArrowRight } from 'lucide-react';
+import { Mail, X, Check, RefreshCw, ArrowRight, AlertTriangle } from 'lucide-react';
 import type { JobStatus } from '../types';
 import type { EmailSuggestion } from '../lib/emailSignals.types';
 import { apiFetch } from '../lib/apiClient';
+import { getStatusMeta } from '../lib/statusMeta';
 
 const DISMISSED_KEY = 'jat.gmailDismissed';
 const MAX_DISMISSED = 500;
@@ -87,12 +88,15 @@ export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggest
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center jat-scrim backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="gmail-suggestions-title"
-        className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col"
+        className="w-full max-w-2xl max-h-[90dvh] sm:max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white border border-slate-200 shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -103,12 +107,17 @@ export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggest
             <button
               type="button"
               onClick={() => void load()}
-              className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
+              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 cursor-pointer"
               aria-label="Check Gmail again"
             >
               <RefreshCw className={`h-4 w-4 ${state.kind === 'loading' ? 'animate-spin' : ''}`} />
             </button>
-            <button type="button" onClick={onClose} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Close">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 cursor-pointer"
+              aria-label="Close Gmail suggestions"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -127,18 +136,32 @@ export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggest
           )}
           {state.kind === 'ready' && state.suggestions.length > 0 && (
             <ul className="space-y-3">
-              {state.suggestions.map((s) => (
+              {state.suggestions.map((s) => {
+                const fromMeta = getStatusMeta(s.fromStatus);
+                const toMeta = getStatusMeta(s.toStatus);
+                const FromIcon = fromMeta.icon;
+                const ToIcon = toMeta.icon;
+                return (
                 <li key={s.messageId} className="rounded-lg border border-slate-200 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-medium text-slate-800">
                       {s.company} <span className="font-normal text-slate-500">· {s.jobTitle}</span>
                     </div>
-                    <div className="flex items-center gap-1 text-xs">
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5">{s.fromStatus}</span>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-medium ${fromMeta.badge}`}>
+                        <FromIcon className={`h-3 w-3 ${fromMeta.iconClass}`} />
+                        {fromMeta.label}
+                      </span>
                       <ArrowRight className="h-3 w-3 text-slate-400" />
-                      <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-semibold text-indigo-700">{s.toStatus}</span>
+                      <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-semibold ${toMeta.badge}`}>
+                        <ToIcon className={`h-3 w-3 ${toMeta.iconClass}`} />
+                        {toMeta.label}
+                      </span>
                       {s.confidence === 'low' && (
-                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">check this</span>
+                        <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                          check this
+                        </span>
                       )}
                     </div>
                   </div>
@@ -166,7 +189,8 @@ export const GmailSuggestionsModal = ({ isOpen, onClose, onApply }: GmailSuggest
                     </button>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

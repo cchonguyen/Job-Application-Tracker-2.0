@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Link2,
@@ -15,9 +15,10 @@ import {
   FileSpreadsheet,
   LogOut,
   Mail,
+  X,
 } from 'lucide-react';
 import { JobStatus } from '../types';
-import { STATUS_META } from '../lib/statusMeta';
+import { STATUS_META, STATUS_ORDER } from '../lib/statusMeta';
 import type { ThemeAccent, ThemeMode } from '../lib/theme';
 import { ThemeSelector } from './ThemeSelector';
 import { ManualJobModal } from './ManualJobModal';
@@ -53,10 +54,7 @@ interface HeaderActionPanelProps {
   };
 }
 
-// Ingest status picker order: Applied first (the default), then the rest.
-const STATUS_OPTIONS: { value: JobStatus; label: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = (
-  ['Applied', 'Saved', 'Interviewing', 'Offer', 'Accepted', 'Rejected', 'Declined'] as JobStatus[]
-).map((status) => {
+const STATUS_OPTIONS = STATUS_ORDER.map((status) => {
   const meta = STATUS_META[status];
   return { value: meta.value, label: meta.label, icon: meta.icon, color: meta.iconClass };
 });
@@ -86,6 +84,7 @@ export const HeaderActionPanel = ({
 
   const statusBtnRef = useRef<HTMLButtonElement>(null);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const infoHeadingId = useId();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,7 +124,7 @@ export const HeaderActionPanel = ({
               <Briefcase className="w-4 h-4" />
             </div>
             <div className="flex items-baseline gap-2.5 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
+              <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight truncate">
                 Job Application Tracker
               </h1>
               <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200/80 shrink-0">
@@ -373,7 +372,7 @@ export const HeaderActionPanel = ({
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
-                    <span>Track Job</span>
+                    <span>Track job</span>
                   </>
                 )}
               </button>
@@ -395,54 +394,63 @@ export const HeaderActionPanel = ({
               <button
                 type="button"
                 onClick={() => setErrorMsg(null)}
-                className="text-rose-500 hover:text-rose-700 font-bold px-1"
+                aria-label="Dismiss error"
+                className="text-rose-500 hover:text-rose-700 p-0.5 rounded hover:bg-rose-100 transition-colors cursor-pointer"
               >
-                ×
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
         </form>
       </div>
 
-      {/* Modals rendered cleanly at top level */}
-      <ManualJobModal
-        isOpen={isManualModalOpen}
-        onClose={() => setIsManualModalOpen(false)}
-        onSubmit={handleManualSubmit}
-        isIngesting={isIngesting}
-      />
-
-      <DevSandboxModal
-        isOpen={isDevModalOpen}
-        onClose={() => setIsDevModalOpen(false)}
-        totalJobs={totalJobs}
-        onSelectSampleUrl={(sampleUrl) => setUrl(sampleUrl)}
-        onOpenAtsDebugger={onOpenAtsDebugger}
-        isIngesting={isIngesting}
-      />
-
+      {/* Modals portaled to document.body to avoid header transform bounds */}
       {createPortal(
-        <BookmarkletModal isOpen={isBookmarkletOpen} onClose={() => setIsBookmarkletOpen(false)} />,
+        <>
+          <ManualJobModal
+            isOpen={isManualModalOpen}
+            onClose={() => setIsManualModalOpen(false)}
+            onSubmit={handleManualSubmit}
+            isIngesting={isIngesting}
+          />
+
+          <DevSandboxModal
+            isOpen={isDevModalOpen}
+            onClose={() => setIsDevModalOpen(false)}
+            totalJobs={totalJobs}
+            onSelectSampleUrl={(sampleUrl) => setUrl(sampleUrl)}
+            onOpenAtsDebugger={onOpenAtsDebugger}
+            isIngesting={isIngesting}
+          />
+
+          <BookmarkletModal isOpen={isBookmarkletOpen} onClose={() => setIsBookmarkletOpen(false)} />
+        </>,
         document.body
       )}
 
       {/* How Extraction Works Modal rendered via Portal to document.body to avoid header bounds */}
       {isInfoOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="fixed inset-0" onClick={() => setIsInfoOpen(false)} />
-            <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 z-10 space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="fixed inset-0" onClick={() => setIsInfoOpen(false)} aria-hidden="true" />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={infoHeadingId}
+              className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6 z-10 space-y-4 max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto"
+            >
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <h3 id={infoHeadingId} className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Briefcase className="w-5 h-5 text-indigo-600" />
-                  How Job Extraction Works
+                  How job extraction works
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsInfoOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1 leading-none"
+                  aria-label="Close extraction guide"
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                 >
-                  ×
+                  <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="space-y-3 text-xs text-slate-600 leading-relaxed">

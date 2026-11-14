@@ -119,7 +119,7 @@ const SignInScreen = ({ state, capture }: { state: GateState; capture: boolean }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg border border-slate-200 p-6 space-y-5 text-sm">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">

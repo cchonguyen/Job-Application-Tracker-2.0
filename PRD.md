@@ -26,7 +26,7 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Layer | Choice |
 |---|---|
 | UI | React 19, Vite, Tailwind CSS 4, `motion`, `lucide-react` |
-| Icons | Favicon is a white briefcase on an indigo (`#4f46e5`) rounded square: `public/favicon.svg`, with `favicon.ico` (16/32/48) and `apple-touch-icon.png` (180) fallbacks, linked from `index.html` |
+| Icons | Favicon is a white briefcase on a cyan (`#0b7285`) rounded square: `public/favicon.svg`, with `favicon.ico` (16/32/48) and `apple-touch-icon.png` (180) fallbacks, linked from `index.html` |
 | Server | The `/api` routes are one Hono app (`server/routes/index.ts`) that runs in two places: on Cloudflare Workers (`worker.ts`, `wrangler.toml`, with `nodejs_compat`), and on Node through `server.ts`, where Express also serves the client (Vite middleware in dev, `dist/` in production; bundled by `esbuild` to `dist/server.cjs`) |
 | Extraction | Cheerio scraper, dedicated ATS APIs, Google Gemini (`@google/genai`, `gemini-3.8-flash`) |
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
@@ -94,9 +94,9 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Suggestions only move a job forward (Saved → Applied → Interviewing → Offer), or to Rejected from any open status. They never suggest Accepted or Declined, never create jobs, and never touch the captured job details, so the snapshot and duplicate rules are unaffected.
 
 ### 4.8 Appearance (`src/lib/theme.ts`, `src/index.css`)
-- Light and dark mode plus five accent colors (Indigo default, Teal, Emerald, Amber, Rose), chosen in the Settings menu and saved in the browser (`jat-theme`). The saved theme is applied before first paint.
+- Light and dark mode plus six accent colors (`cyan` / `neon-cyan` default `#0b7285`, `teal`, `emerald`, `amber`, `rose`, and `indigo`), chosen in the Settings menu and saved in the browser (`jat-theme`). The saved theme is applied before first paint with both `data-mode` and `data-theme` synced on `<html>`.
 - Status colors are fixed per status and never follow the accent; they are defined once in `src/lib/statusMeta.ts`.
-- The full design language and voice rules live in `docs/DESIGN_SYSTEM.md`.
+- The project's Harness UI profile lives in [`design-system/profile.md`](design-system/profile.md) and the full design language and voice rules live in `docs/DESIGN_SYSTEM.md`.
 
 ---
 

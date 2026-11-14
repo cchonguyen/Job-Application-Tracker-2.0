@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X, Cpu, Play, CheckCircle2, XCircle, AlertCircle, Clock, ExternalLink, Loader2, ArrowRight } from 'lucide-react';
 import { DiagnosticReport } from '../types';
 import { apiFetch } from '../lib/apiClient';
@@ -66,6 +66,7 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
   const [isRunning, setIsRunning] = useState(false);
   const [report, setReport] = useState<DiagnosticReport | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const headingId = useId();
 
   if (!isOpen) return null;
 
@@ -95,16 +96,21 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-40 overflow-y-auto jat-scrim backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="bg-white rounded-t-2xl sm:rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]"
+      >
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="shrink-0 px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-indigo-100 rounded-lg text-indigo-700">
               <Cpu className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">ATS Debugger & Multi-Tier Test Suite</h3>
+              <h3 id={headingId} className="text-base font-bold text-slate-900">ATS Debugger & Multi-Tier Test Suite</h3>
               <p className="text-xs text-slate-500">
                 Inspect raw parser signatures, HTTP latency, and pipeline escalation tiers
               </p>
@@ -113,6 +119,7 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close ATS diagnostic dialog"
             className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -120,7 +127,7 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1 min-h-0">
           {/* Preset Test Case Selector */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">
@@ -181,7 +188,7 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
                 ) : (
                   <>
                     <Play className="w-4 h-4" />
-                    <span>Run Diagnostic</span>
+                    <span>Run diagnostic</span>
                   </>
                 )}
               </button>
@@ -274,13 +281,13 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <div className="shrink-0 px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
           <button
             type="button"
             onClick={onClose}
             className="px-4 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
-            Close Debugger
+            Close
           </button>
         </div>
       </div>

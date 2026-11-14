@@ -65,9 +65,9 @@ export default function App() {
       });
       setSelectedJob((prev) => (prev && prev.id === job.id ? job : prev));
       if (payload.type === 'job-upgraded') {
-        showToast(`Job ${job.company} upgraded via 1-Click Capture!`, 'success');
+        showToast(`Updated ${job.company} from captured page`, 'success');
       } else if (payload.type === 'job-saved') {
-        showToast(`Job ${job.company} captured and added to tracker!`, 'success');
+        showToast(`Added ${job.company} to your tracker`, 'success');
       }
     };
 
@@ -152,13 +152,15 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-x-clip max-w-full">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white overflow-x-clip max-w-full">
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2.5 text-xs font-medium animate-in slide-in-from-bottom-5 duration-200 ${
+          role="status"
+          aria-live="polite"
+          className={`jat-toast-container px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2.5 text-xs font-medium animate-in slide-in-from-bottom-5 duration-200 ${
             toast.type === 'success'
-              ? 'bg-zinc-900 text-white border-zinc-700'
+              ? 'jat-tooltip border-zinc-700'
               : toast.type === 'warning'
               ? 'bg-amber-950 text-amber-100 border-amber-800'
               : 'bg-rose-900 text-rose-100 border-rose-800'
@@ -199,7 +201,7 @@ export default function App() {
           onSyncNow: async () => {
             const ok = await sheetsSync.syncNow(jobs);
             if (ok) {
-              showToast('Google Sheet successfully synchronized!', 'success');
+              showToast('Google Sheet synchronized', 'success');
             } else if (sheetsSync.lastError) {
               showToast(sheetsSync.lastError, 'error');
             }
@@ -229,7 +231,7 @@ export default function App() {
             onSyncNow: async () => {
               const ok = await sheetsSync.syncNow(jobs);
               if (ok) {
-                showToast('Google Sheet successfully synchronized!', 'success');
+                showToast('Google Sheet synchronized', 'success');
               }
               return ok;
             },
@@ -292,7 +294,7 @@ export default function App() {
         onSyncNow={async () => {
           const ok = await sheetsSync.syncNow(jobs);
           if (ok) {
-            showToast('Google Sheet successfully synchronized!', 'success');
+            showToast('Google Sheet synchronized', 'success');
           }
           return ok;
         }}

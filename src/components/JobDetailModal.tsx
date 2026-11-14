@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import {
   X,
@@ -70,6 +70,7 @@ export const JobDetailModal = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isBookmarkletOpen, setIsBookmarkletOpen] = useState(false);
   const dragControls = useDragControls();
+  const headingId = useId();
 
   // Prevent background layer from moving/scrolling on mobile while modal is open
   useEffect(() => {
@@ -117,19 +118,23 @@ export const JobDetailModal = ({
   return (
     <AnimatePresence>
       {isOpen && job && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs cursor-pointer touch-none"
+            aria-hidden="true"
+            className="fixed inset-0 jat-scrim backdrop-blur-xs overflow-y-auto cursor-pointer touch-none"
             onClick={onClose}
           />
 
           {/* Bottom Sheet on Mobile / Centered Card on Desktop */}
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={headingId}
             initial={{ y: '100%', opacity: 0.5 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0 }}
@@ -173,9 +178,9 @@ export const JobDetailModal = ({
                     className="!w-9 !h-9 sm:!w-11 sm:!h-11 text-xs sm:text-sm"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-base sm:text-xl font-bold text-slate-900 leading-snug break-words">
+                    <h2 id={headingId} className="text-base sm:text-xl font-bold text-slate-900 leading-snug break-words">
                       {job.company}
-                    </p>
+                    </h2>
                     <p className="text-sm sm:text-base font-semibold text-slate-700 leading-snug break-words mt-0.5">
                       {job.jobTitle}
                       {job.team && (
@@ -188,7 +193,7 @@ export const JobDetailModal = ({
                   type="button"
                   onClick={onClose}
                   className="p-2 -mr-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer shrink-0"
-                  aria-label="Close"
+                  aria-label="Close job details"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -466,7 +471,7 @@ export const JobDetailModal = ({
                         </span>
                       ))}
                       {(!job.positionMetadata?.requiredSkills || job.positionMetadata.requiredSkills.length === 0) && (
-                        <span className="text-slate-400 italic">None specified</span>
+                        <span className="text-slate-400 italic">Not listed</span>
                       )}
                     </div>
                   </div>
@@ -487,7 +492,7 @@ export const JobDetailModal = ({
                     className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer disabled:opacity-50"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>{isSavingNotes ? 'Saving...' : 'Save Notes'}</span>
+                    <span>{isSavingNotes ? 'Saving…' : 'Save notes'}</span>
                   </button>
                 </div>
                 <textarea
@@ -526,11 +531,11 @@ export const JobDetailModal = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-900 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Delete Record</span>
+                    <span className="hidden sm:inline">Delete job</span>
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-rose-700 font-medium">Confirm?</span>
+                    <span className="text-xs text-rose-700 font-medium">Delete?</span>
                     <button
                       type="button"
                       onClick={async () => {
@@ -539,7 +544,7 @@ export const JobDetailModal = ({
                       }}
                       className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-md transition-colors cursor-pointer"
                     >
-                      Yes
+                      Delete job
                     </button>
                     <button
                       type="button"
@@ -569,7 +574,7 @@ export const JobDetailModal = ({
                   onClick={onClose}
                   className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
                 >
-                  Done
+                  Close
                 </button>
               </div>
             </div>

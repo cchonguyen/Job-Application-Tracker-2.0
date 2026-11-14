@@ -104,7 +104,7 @@ export const CapturePage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg border border-slate-200 p-6 space-y-4 text-sm">
         {state.kind === 'saving' && (
           <div className="flex items-center gap-3 text-slate-700">

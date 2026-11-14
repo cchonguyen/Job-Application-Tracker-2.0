@@ -105,7 +105,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error' 
           setJobs((prev) => prev.map((j) => (j.id === data.job!.id ? data.job! : j)));
           setPendingDuplicate(null);
           showToast(
-            `Upgraded ${data.job.company} (${data.job.jobTitle}) in-place via ${data.tierUsed}!`,
+            `Upgraded ${data.job.company} (${data.job.jobTitle}) in-place via ${data.tierUsed}`,
             'success'
           );
         } else if (data.shortCircuited || needsManualReview(data.job.extractedVia)) {
@@ -121,7 +121,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error' 
           setJobs((prev) => [data.job!, ...prev]);
           setPendingDuplicate(null);
           showToast(
-            `Extracted ${data.job.company} (${data.job.jobTitle}) via ${data.tierUsed}! Added to spreadsheet.`,
+            `Extracted ${data.job.company} (${data.job.jobTitle}) via ${data.tierUsed}. Added to spreadsheet.`,
             'success'
           );
         }
@@ -153,7 +153,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error' 
         setJobs((prev) => [data.job!, ...prev]);
         setPendingDuplicate(null);
         showToast(
-          `Added ${data.job.company} (${data.job.jobTitle}) to spreadsheet!`,
+          `Added ${data.job.company} (${data.job.jobTitle}) to spreadsheet`,
           'success'
         );
       } else {

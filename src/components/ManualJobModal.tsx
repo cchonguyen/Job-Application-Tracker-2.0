@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { X, FileText, Send, Bookmark, Calendar, Award, CheckCircle2, XCircle, Ban } from 'lucide-react';
+import { useId, useState } from 'react';
+import { X, FileText } from 'lucide-react';
 import { JobStatus } from '../types';
+import { STATUS_META, STATUS_ORDER } from '../lib/statusMeta';
 
 interface ManualJobModalProps {
   isOpen: boolean;
@@ -9,21 +10,12 @@ interface ManualJobModalProps {
   isIngesting: boolean;
 }
 
-const STATUS_OPTIONS: { value: JobStatus; label: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
-  { value: 'Applied', label: 'Applied', icon: Send, color: 'text-indigo-600' },
-  { value: 'Saved', label: 'Saved', icon: Bookmark, color: 'text-slate-600' },
-  { value: 'Interviewing', label: 'Interviewing', icon: Calendar, color: 'text-amber-600' },
-  { value: 'Offer', label: 'Offer', icon: Award, color: 'text-emerald-600' },
-  { value: 'Accepted', label: 'Accepted', icon: CheckCircle2, color: 'text-teal-600' },
-  { value: 'Rejected', label: 'Rejected', icon: XCircle, color: 'text-rose-600' },
-  { value: 'Declined', label: 'Declined', icon: Ban, color: 'text-stone-600' },
-];
-
 export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: ManualJobModalProps) => {
   const [manualText, setManualText] = useState('');
   const [targetStatus, setTargetStatus] = useState<JobStatus>('Applied');
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const headingId = useId();
 
   if (!isOpen) return null;
 
@@ -49,12 +41,18 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-200">
       <div
         className="fixed inset-0"
         onClick={() => !isIngesting && onClose()}
+        aria-hidden="true"
       />
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[90vh]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        className="relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]"
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2.5">
@@ -62,7 +60,7 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
               <FileText className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Manual Job Description Entry</h3>
+              <h3 id={headingId} className="text-sm font-bold text-slate-900">Manual job description</h3>
               <p className="text-xs text-slate-500">Paste text from login-walled portals or private documents</p>
             </div>
           </div>
@@ -70,7 +68,8 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
             type="button"
             onClick={onClose}
             disabled={isIngesting}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            aria-label="Close manual entry dialog"
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -86,7 +85,7 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Job Description / Listing Text <span className="text-rose-500">*</span>
+              Job description <span className="text-rose-500">*</span>
             </label>
             <textarea
               rows={8}
@@ -102,7 +101,7 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Initial Status
+                Initial status
               </label>
               <select
                 value={targetStatus}
@@ -110,17 +109,20 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
                 disabled={isIngesting}
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
+                {STATUS_ORDER.map((status) => {
+                  const meta = STATUS_META[status];
+                  return (
+                    <option key={meta.value} value={meta.value}>
+                      {meta.label}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Personal Notes (Optional)
+                Personal notes
               </label>
               <input
                 type="text"
@@ -147,7 +149,7 @@ export const ManualJobModal = ({ isOpen, onClose, onSubmit, isIngesting }: Manua
               disabled={isIngesting}
               className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-sm disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
             >
-              {isIngesting ? 'Parsing Text...' : 'Parse & Add to Tracker'}
+              {isIngesting ? 'Parsing text…' : 'Parse & add job'}
             </button>
           </div>
         </form>
