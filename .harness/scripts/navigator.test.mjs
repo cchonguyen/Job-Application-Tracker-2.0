@@ -17,6 +17,7 @@ import {
 import { freezeBlackBox } from './freeze-black-box.mjs';
 import { parseActiveTargets as parseTargetsFinish, finishSlice } from './finish-slice.mjs';
 import { parseActiveTargets as parseTargetsScope, analyze as analyzeScope } from './pr-scope-check.mjs';
+import { appendCall } from './lib/telemetry.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'navigator.mjs');
@@ -157,6 +158,28 @@ test('checkAtlasReferences detects broken links in ATLAS.md', () => {
   }
 });
 
+test('checkAtlasReferences flags a .spec/ file that has no coordinate in ATLAS.md', () => {
+  const dir = makeTempSpecRepo();
+  try {
+    fs.writeFileSync(path.join(dir, '.spec', 'NEW_NOTES.md'), '# Notes\n');
+    const { unindexedSpecFiles } = checkAtlasReferences(dir);
+    assert.equal(unindexedSpecFiles.length, 1);
+    assert.equal(unindexedSpecFiles[0].file, '.spec/NEW_NOTES.md');
+
+    const result = navigatorCheck(dir);
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((e) => e.includes('Unindexed spec file: .spec/NEW_NOTES.md')));
+
+    fs.appendFileSync(
+      path.join(dir, '.spec', 'ATLAS.md'),
+      '- `950` [.spec/NEW_NOTES.md](.spec/NEW_NOTES.md) — Notes\n'
+    );
+    assert.equal(checkAtlasReferences(dir).unindexedSpecFiles.length, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('checkLineBudgets detects files exceeding soft caps', () => {
   const dir = makeTempSpecRepo();
   try {
@@ -287,7 +310,7 @@ test('pr-scope-check analyze verifies line budgets against soft caps', () => {
   assert.ok(fail.problems.some((p) => p.includes('Line budget exceeded: CLAUDE.md has 7 lines (soft cap: 5)')));
 });
 
-test('finishSlice does not remove [IN_PROGRESS] if working tree has unstaged files outside scope', () => {
+test('finishSlice commits untracked files outside scope and records them in Scope-Widened', () => {
   const dir = makeTempSpecRepo();
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
@@ -299,15 +322,13 @@ test('finishSlice does not remove [IN_PROGRESS] if working tree has unstaged fil
     // Also create an untracked dirty file outside scope
     fs.writeFileSync(path.join(dir, 'untracked-rogue.txt'), 'rogue');
 
-    assert.throws(
-      () => finishSlice(dir, 'feat: attempt finish', { skipChecks: true }),
-      /untracked-rogue\.txt/
-    );
+    finishSlice(dir, 'feat: attempt finish', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
 
-    // Verify [IN_PROGRESS] was preserved in PROGRESS.md
+    const body = git('log', '-1', '--format=%B');
+    assert.match(body, /^Scope-Widened: untracked-rogue\.txt$/m);
     const progress = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
-    assert.match(progress, /\*\*Slice 2\*\* \[IN_PROGRESS\]/);
-    assert.doesNotMatch(progress, /- \[x\] \*\*Slice 2\*\*/);
+    assert.match(progress, /- \[x\] \*\*Slice 2\*\*/);
+    assert.doesNotMatch(progress, /\[IN_PROGRESS\]/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -327,6 +348,9 @@ test('finishSlice git staging does not crash when tracking files are ignored by 
 
     // Create target file change
     fs.writeFileSync(path.join(dir, 'b.txt'), 'b content updated');
+
+    // The telemetry gate needs a subagent dispatch for slice 2 before it will finish.
+    appendCall(dir, { ts: new Date().toISOString(), tool: 'Agent', agentType: 'harness:gf-coder', role: 'goldfish', filePath: '', slice: '2' });
 
     // finishSlice should stage and commit without crashing on ignored tracking file
     const res = finishSlice(dir, 'feat: finish with gitignored tracking file', { skipChecks: true });

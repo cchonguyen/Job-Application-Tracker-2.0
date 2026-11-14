@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -484,4 +484,129 @@ test('SKIP_MARK matches modern framework skip patterns when uncommented', () => 
   for (const line of skipPatterns) {
     assert.ok(SKIP_MARK.test(line), `Expected SKIP_MARK to match: ${line}`);
   }
+});
+
+test('an additive Supabase migration does not trip the migrations wire; other migration edits still do', () => {
+  const added = testDiff('supabase/migrations/0034_edition_fact_sources.sql', ['alter table event_editions add column if not exists fact_source_note text;']);
+  const r = analyze({ changed: ['supabase/migrations/0034_edition_fact_sources.sql'], diff: added, progress: '' });
+  assert.equal(r.tripwireFired, false);
+  assert.equal(isAdditiveSupabaseMigration('supabase/migrations/0034_edition_fact_sources.sql', added), true);
+
+  const rewritten = testDiff('supabase/migrations/0030_performance_set.sql', ['select 1;'], ['select 0;']);
+  const r2 = analyze({ changed: ['supabase/migrations/0030_performance_set.sql'], diff: rewritten, progress: '' });
+  assert.equal(r2.tripwireFired, true);
+
+  const other = testDiff('db/migrations/001.sql', ['select 1;']);
+  assert.equal(isAdditiveSupabaseMigration('db/migrations/001.sql', other), false);
+});
+
+test('strict: the four sync-delivered gate files raise no tripwire or engine problem', () => {
+  const changed = [
+    '.github/workflows/harness-slice-gate.yml',
+    '.github/workflows/harness-referee-watch.yml',
+    '.harness/scripts/ci-gate.mjs',
+    '.harness/scripts/ci-gate.test.mjs',
+  ];
+  const r = analyze({ changed, strict: true, hubSync: false });
+  assert.deepEqual(r.problems, []);
+  assert.ok(r.notes.some((n) => n.includes('.harness/scripts/ci-gate.mjs') && n.includes('not verified against the hub')));
+});
+
+test('strict: other workflow files still trip the CI workflow tripwire', () => {
+  const r = analyze({ changed: ['.github/workflows/ci.yml'], strict: true, hubSync: false });
+  assert.ok(r.problems.some((p) => p.includes('Red tripwire (CI workflow): .github/workflows/ci.yml')));
+});
+
+test('strict: other engine files still count as spoke changes to the hub-owned engine', () => {
+  const r = analyze({ changed: ['.harness/scripts/pr-scope-check.mjs'], strict: true, hubSync: false });
+  assert.ok(r.problems.some((p) => p.includes('Spoke changed an engine file') && p.includes('pr-scope-check.mjs')));
+});
+
+test('a stale [IN_PROGRESS] placeholder with no changed targets does not block a done slice in the PR', () => {
+  // finish-slice promoted the next slice (targets src/next/). This PR finishes Slice 9 (targets src/foo.js).
+  const doneLine = '- [x] **Slice 9** `[YELLOW][CORE / DATA]`: thing — Target files: `src/foo.js`, `src/foo.test.js`';
+  const nextLine = '- [ ] **Slice 10** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const diff = new Map([['.spec/PROGRESS.md', { added: [doneLine, nextLine], removed: [] }]]);
+  const r = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/foo.js', 'src/foo.test.js'],
+    diff: new Map([...diff, ['src/foo.js', { added: [], removed: [] }], ['src/foo.test.js', { added: ['expect(1).toBe(1);'], removed: [] }]]),
+    progress: doneLine + '\n' + nextLine + '\n',
+  });
+  assert.equal(r.sliceType, 'CORE / DATA');
+  assert.ok(!r.problems.some((p) => p.includes("Outside the slice's Target files")), r.problems.join('; '));
+  assert.ok(r.notes.some((n) => n.includes('no changed Target files')));
+});
+
+test('a placeholder that lists .spec/PROGRESS.md is not taken as touched by a done slice PR', () => {
+  // Concert-Tracker PR #262: the promoted next slice lists .spec/PROGRESS.md, which every slice PR changes.
+  const doneLine = '- [x] **Slice 9.1** `[CORE / DATA]` : thing. Target files: `src/foo.js`, `src/foo.test.js`, `.spec/PROGRESS.md`';
+  const nextLine = '- [ ] **Slice 9.2** [IN_PROGRESS] `[UI / VISUAL]` : next. Target files: `src/next/x.tsx`, `.spec/PROGRESS.md`';
+  const r = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/foo.js', 'src/foo.test.js'],
+    diff: new Map([
+      ['.spec/PROGRESS.md', { added: [doneLine, nextLine], removed: [] }],
+      ['src/foo.js', { added: [], removed: [] }],
+      ['src/foo.test.js', { added: ['assert.equal(1, 1);'], removed: [] }],
+    ]),
+    progress: doneLine + '\n' + nextLine + '\n',
+  });
+  assert.equal(r.sliceType, 'CORE / DATA');
+  assert.ok(!r.problems.some((p) => p.includes("Outside the slice's Target files")), r.problems.join('; '));
+});
+
+test('an [IN_PROGRESS] slice whose targets this PR changes still blocks out-of-scope files', () => {
+  const activeLine = '- [ ] **Slice 10** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const r = analyze({
+    changed: ['src/next/x.js', 'src/other.js'],
+    diff: new Map([['src/next/x.js', { added: ['expect(1).toBe(1);'], removed: [] }], ['src/other.js', { added: [], removed: [] }]]),
+    progress: activeLine + '\n',
+  });
+  assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
+});
+
+test('a verified hub sync is not flagged as outside an [IN_PROGRESS] slice targets', () => {
+  const activeLine = '- [ ] **Slice 8.7** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const changed = ['.harness/scripts/pr-scope-check.mjs', '.harness/managed.json'];
+  const r = analyze({
+    changed,
+    diff: new Map(changed.map((f) => [f, { added: [], removed: [] }])),
+    progress: activeLine + '\n',
+    strict: true,
+    hubSync: true,
+  });
+  assert.ok(!r.problems.some((p) => p.includes("Outside the slice's Target files")), r.problems.join('; '));
+});
+
+test('a hub-sync PR that also changes a non-engine file is still flagged outside the slice targets', () => {
+  const activeLine = '- [ ] **Slice 8.7** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const changed = ['.harness/scripts/pr-scope-check.mjs', '.harness/managed.json', 'src/other.js'];
+  const r = analyze({
+    changed,
+    diff: new Map(changed.map((f) => [f, { added: [], removed: [] }])),
+    progress: activeLine + '\n',
+    strict: true,
+    hubSync: true,
+  });
+  assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
+});
+
+test('isTemplateCopy is true only for a workflow identical to its hub template', () => {
+  const WF = '.github/workflows/harness-labels.yml';
+  const TPL = '.harness/templates/workflows/harness-labels.yml';
+  const files = (m) => (p) => (p in m ? m[p] : null);
+  assert.equal(isTemplateCopy(WF, files({ [WF]: 'a', [TPL]: 'a' })), true);
+  assert.equal(isTemplateCopy(WF, files({ [WF]: 'a', [TPL]: 'b' })), false);
+  assert.equal(isTemplateCopy(WF, files({ [WF]: 'a' })), false);
+  assert.equal(isTemplateCopy('src/app.ts', files({ 'src/app.ts': 'a', '.harness/templates/workflows/app.ts': 'a' })), false);
+  assert.equal(isTemplateCopy(WF, null), false);
+});
+
+test('analyze: template-copy workflow is not a tripwire; a differing workflow is', () => {
+  const WF = '.github/workflows/harness-labels.yml';
+  const TPL = '.harness/templates/workflows/harness-labels.yml';
+  const run = (text) => analyze({ changed: [WF], readHead: (p) => ({ [WF]: text, [TPL]: 'a' })[p] ?? null });
+  const same = run('a');
+  assert.equal(same.tripwireFired, false);
+  assert.ok(same.notes.some((n) => n.includes('Sync-delivered harness file')));
+  assert.equal(run('b').tripwireFired, true);
 });

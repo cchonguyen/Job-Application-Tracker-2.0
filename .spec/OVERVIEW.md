@@ -12,5 +12,6 @@
 
 ## Current Build Status
 - **Live & Verified:** v0.7.x on Cloudflare Workers: link and paste ingest, bookmarklet capture, 4-tier extraction, duplicate warning, multi-user Google login.
+- **Harness:** Engine files synced to claude-harness-hub v3.2.0 (PR #29, 2026-11-12).
 - **In Progress:** None
 - **Up Next:** Retire the Render deploy once Cloudflare has run cleanly for a week.

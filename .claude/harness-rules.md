@@ -1,4 +1,4 @@
-# Claude Code Harness Contract (v3.1)
+# Claude Code Harness Contract (v3.2)
 
 ## Core Communication & Silent Batching Rules
 - **Substantive Inception:** Start immediately with output or action. Zero pleasantries, apologies, or filler.
@@ -20,12 +20,12 @@
 - **Vibe Mode (no `[IN_PROGRESS]` slice, or no `.spec/PROGRESS.md`):** Edit the requested files directly. Do NOT require `/triage` or `/spec` first. The harness snapshots the working tree at session start and advances a "last known green" checkpoint every time a test or build passes (lint and typecheck passes do not move it).
 - **Slice Mode (exactly 1 `[IN_PROGRESS]` slice):** Strict single-task lock. Edit only `.spec/` files and the slice's declared `Target files:`. A slice-start checkpoint (`.spec/.slice-checkpoint`) is saved automatically when the line is marked `[IN_PROGRESS]`.
 - **2+ `[IN_PROGRESS]` slices:** Edits are blocked. Keep only 1 active slice (or clear them all for Vibe Mode).
-- **Manager Mode (`.spec/harness.json` says `"workMode": "manager"`):** With no `[IN_PROGRESS]` slice, source edits are blocked (PLAN LOCK). Plan with `/triage` or `/spec`, or make a one-file change with `/quick-fix`. Harness files, `.spec/harness.json`, and the harness block in `AGENTS.md` are locked in every mode.
+- **Manager Mode (`.spec/harness.json` says `"workMode": "manager"`):** With no `[IN_PROGRESS]` slice, source edits are blocked (PLAN LOCK). Plan with `/triage` or `/spec`, make a one-file change with `/quick-fix`, or open an on-the-fly slice in one step: open the issue first, then run `node .harness/scripts/start-slice.mjs --adhoc --title "<t>" --tag core|ui --targets "<a,b>" --verify "<cmd>" --issue <N> --reason "<operator request or bug>"`. The operator's request is the approval, so no plan file or `/spec` is needed. Red tripwire paths and 5 or more files still go through `/spec`. Harness files, `.spec/harness.json`, and the harness block in `AGENTS.md` are locked in every mode.
 - **Pending rule candidates:** Lines under `## Pending Rule Candidates — not in force` in `.claude/project-rules.md` are not rules. Do not follow them until the operator promotes one with `/learn promote`.
 - **Main-red stop:** While origin has the tag `harness-main-red`, do not start a slice or a quick fix. Fixing main is the only work.
 
 ## Execution & Guardrail Rules
-- **Verification in Vibe Mode:** Run the project's quick check from `CLAUDE.md` (`Project-Specific Commands`) **once per turn, after the final edit**, with quiet flags (`pytest -q --tb=short`, `ruff check --quiet`, `vitest run --reporter=dot`). Do not re-run it after every single file edit.
+- **Verification in Vibe Mode:** Run the project's quick check from `CLAUDE.md` (`Project-Specific Commands`) **once per turn, after the final edit**, using the project's quiet flags. Do not re-run it after every single file edit.
 - **Risk-Based Verification (Slice Mode):**
   - `[UI / VISUAL]` tasks: Run quiet typecheck only. Zero unit tests required.
   - `[CORE / DATA]` tasks: Write and pass automated unit tests before marking complete.
@@ -35,6 +35,17 @@
   Then output a `Needed from you:` block offering `/prep-audit diff`. Missing tools or dependencies (exit 127, `command not found`, `No module named`) are not strikes: install the project dependencies and re-run.
 - **Exploration Hint:** When you cannot locate the relevant code within 2 searches, delegate exploration to the `discovery` subagent (Haiku) or built-in Explore agent rather than reading large numbers of unfamiliar files into main context.
 - **Zero Manual Script Burden:** Execute `.harness/scripts/*.mjs` via `node` directly on the user's behalf.
+
+## Slice Issues
+- `/spec` opens one GitHub Issue per slice with labels `slice`, `status:backlog` and the repo's project label (`project:<repo>`). It then writes `Issue: #N` on the slice line.
+- Every slice pull request body includes `Closes #N`.
+- With nothing in progress, look for open issues labelled `status:ready` first (oldest first). Then use the `.spec/PROGRESS.md` backlog.
+- Never set status labels by hand. Workflows set them from pull request events.
+- To block a slice or ask the operator something, comment `/block <reason>` or `/needs-me <question>` on the issue. The other commands are `/ready`, `/backlog`, `/unblock` and `/wontdo`.
+- Mark a slice that touches a gate with the `gate-change` label.
+- On-the-fly slices (`start-slice.mjs --adhoc`) follow the same issue rules. Open the issue with `issue_write` first (labels `slice`, `status:backlog`, the project label, plus `gate-change` when it applies), then pass its number as `--issue <N>`.
+- Use the GitHub MCP tools (`issue_write`, `add_issue_comment`) for issues. Never use `gh`.
+- A slice already in `.spec/PROGRESS.md` with no `Issue: #N` gets its issue before work starts. The status label follows the pull request, so the board shows it.
 
 ## Web-First Execution
 - Run all scripts, tests, and git operations yourself in the Cloud container. Never ask the operator to run something you can run.
@@ -54,3 +65,5 @@
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
 - When giving the operator steps to run in Terminal, always use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block. Every command must be complete and paste-ready: never a partial snippet, never "run the same as before", and never a path the operator has not confirmed. Before writing Terminal steps, confirm the project folder with a directory listing.
+- **Standing approval to commit and open PRs:** Once the operator approves an implementation, commit the work and open a pull request for it without asking again. Do not merge, deploy, force-push, delete branches, close or reopen pull requests, or change repository visibility without the operator's explicit yes for that specific action. Merging stays an operator step.
+- **Merger lookup before asking:** Before asking the operator who merged a pull request, check the merge record on GitHub (merger and merge time). Ask only when the record does not show it. Never ask about a merge the operator has already made.
