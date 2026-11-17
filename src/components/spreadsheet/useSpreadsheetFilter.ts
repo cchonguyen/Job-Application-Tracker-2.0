@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { JobRecord, JobStatus } from '../../types';
 import { DEFAULT_VISIBLE_STATUSES, STATUS_ORDER } from '../../lib/statusMeta';
+import { jobMatchesSearch } from '../../lib/jobSearch';
 
 export type SortField = 'dateApplied' | 'company' | 'jobTitle' | 'salary';
 export type SortOrder = 'asc' | 'desc';
@@ -167,19 +168,11 @@ export function useSpreadsheetFilter(jobs: JobRecord[]) {
   const filteredAndSortedJobs = useMemo(() => {
     return jobs
       .filter((job) => {
-        if (!selectedStatuses.has(job.status)) {
-          return false;
+        // A typed search covers every status; the status filter applies only when not searching.
+        if (!searchQuery.trim()) {
+          return selectedStatuses.has(job.status);
         }
-        if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-          job.company.toLowerCase().includes(q) ||
-          job.jobTitle.toLowerCase().includes(q) ||
-          (job.team && job.team.toLowerCase().includes(q)) ||
-          job.location.toLowerCase().includes(q) ||
-          job.industry.toLowerCase().includes(q) ||
-          (job.notes && job.notes.toLowerCase().includes(q))
-        );
+        return jobMatchesSearch(job, searchQuery);
       })
       .sort((a, b) => compareJobsForSpreadsheet(a, b, sortField, sortOrder));
   }, [jobs, selectedStatuses, searchQuery, sortField, sortOrder]);
