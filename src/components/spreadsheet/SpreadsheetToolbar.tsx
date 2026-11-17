@@ -98,7 +98,7 @@ export const SpreadsheetToolbar = ({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search company, title, or skills..."
+            placeholder="Search all applications..."
             className="w-full pl-9 pr-7 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50/60 hover:bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-slate-400"
           />
           {searchQuery && (

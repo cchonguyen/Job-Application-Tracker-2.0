@@ -20,7 +20,7 @@ The docs change in the same PR as the code they describe; the **Docs updated** c
 - Manual text fallback for SPA / bot-protected portals (e.g. Darwinbox)
 - One-click capture bookmarklet (Settings › One-click capture) that saves the page you are viewing, including Darwinbox, Workday and LinkedIn
 - Track status: Saved → Applied → Interviewing → Offer → Accepted / Rejected / Declined
-- Search, filter, sort, edit, notes, and CSV/JSON export
+- Search across all statuses, filter, sort, edit, notes, and CSV/JSON export
 - Import previously exported JSON or CSV (Options → Import JSON / CSV)
 - ATS debugger for multi-tier extraction diagnostics
 - Google sign-in: each account sees only its own applications (Supabase Auth + Postgres row-level security)
