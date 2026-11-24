@@ -131,8 +131,11 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
           {/* Preset Test Case Selector */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-2">
-              Select Preset Diagnostic Signature:
+              Example links:
             </label>
+            <p className="text-[11px] text-slate-500 mb-2">
+              These use made-up posting IDs, so they show how each kind of link is routed. Paste a real posting below to see a full read.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {PRESET_TEST_CASES.map((preset, idx) => (
                 <button
@@ -162,7 +165,7 @@ export const AtsDiagnosticModal = ({ isOpen, onClose }: AtsDiagnosticModalProps)
           {/* Custom URL Input */}
           <div className="space-y-2">
             <label htmlFor="diagnostic-custom-url-input" className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
-              Or Test Custom Target URL:
+              Or test a posting URL:
             </label>
             <div className="flex gap-2">
               <input
