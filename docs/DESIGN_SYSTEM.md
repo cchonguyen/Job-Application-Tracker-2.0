@@ -206,9 +206,10 @@ Label: eyebrow token (4). Value: `text-xs font-semibold text-slate-800`. Missing
 `bg-white border border-slate-200 rounded-xl shadow-2xs`. A card that represents a pipeline item shows its status with the status badge or dot. If a stronger cue is needed, use `border-l-4` + `STATUS_META[status].borderAccent`.
 
 **Modal**
+- Every dialog uses `src/components/Modal.tsx` for the scrim and dialog wrapper (`role="dialog"`, or `role="alertdialog"` for confirmations, `aria-modal`, `aria-labelledby`, backdrop click, z layer). Only the panel classes and content vary. `JobDetailModal` is a side drawer and keeps its own shell.
 - Z-index scale: `z-40` for primary dialogs and the sticky header (header-triggered modals portal to `document.body` to escape header transform bounds); `z-50` for stacked confirmation dialogs (`DuplicateWarningModal`, `GoogleSheetsSyncModal` confirm), `PortalDropdown`, and `.jat-toast-container` (matching `--z-toast: 50`).
 - Overlay: `fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-150` (`z-50` for stacked confirmations).
-- Panel: `role="dialog"` (or `role="alertdialog"` for confirmations), `aria-modal="true"`, `aria-labelledby={headingId}`, `relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]` (`JobDetailModal` uses `rounded-t-3xl sm:rounded-2xl`).
+- Panel (set by `Modal`): `role="dialog"` (or `role="alertdialog"` for confirmations), `aria-modal="true"`, `aria-labelledby={headingId}`, `relative w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]` (`JobDetailModal` uses `rounded-t-3xl sm:rounded-2xl`).
 - Header with heading (`id={headingId}`) and a close `<button type="button">` using Lucide `<X />` with an explicit `aria-label="Close ..."`; scrollable body; footer with secondary then primary button on the right.
 
 **Toast**

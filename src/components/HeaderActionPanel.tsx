@@ -27,6 +27,7 @@ import { useAccount } from './AuthGate';
 import { APP_VERSION, APP_COMMIT, formatBuildTime } from '../lib/appVersion';
 import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
+import { Modal } from './Modal';
 
 interface HeaderActionPanelProps {
   totalJobs: number;
@@ -406,65 +407,61 @@ export const HeaderActionPanel = ({
       {/* How Extraction Works Modal rendered via Portal to document.body to avoid header bounds */}
       {isInfoOpen &&
         createPortal(
-          <div className="fixed inset-0 z-40 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 jat-scrim backdrop-blur-xs animate-in fade-in duration-150">
-            <div className="fixed inset-0" onClick={() => setIsInfoOpen(false)} aria-hidden="true" />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby={infoHeadingId}
-              className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6 z-10 space-y-4 max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 id={infoHeadingId} className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 text-indigo-600" />
-                  How job extraction works
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsInfoOpen(false)}
-                  aria-label="Close extraction guide"
-                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+          <Modal
+            labelledBy={infoHeadingId}
+            onBackdropClick={() => setIsInfoOpen(false)}
+            panelClassName="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6 space-y-4 max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 id={infoHeadingId} className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-indigo-600" />
+                How job extraction works
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsInfoOpen(false)}
+                aria-label="Close extraction guide"
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100">
+                <strong className="text-indigo-900 text-sm block mb-1">1. ATS APIs</strong>
+                <p>
+                  Links from Greenhouse, Lever, Workable, Ashby, Workday, SmartRecruiters, Recruitee, Pinpoint and BambooHR are read from the platform's own job API. Tracking parameters and redirect wrappers are removed from the link first.
+                </p>
               </div>
-              <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
-                <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100">
-                  <strong className="text-indigo-900 text-sm block mb-1">1. ATS APIs</strong>
-                  <p>
-                    Links from Greenhouse, Lever, Workable, Ashby, Workday, SmartRecruiters, Recruitee, Pinpoint and BambooHR are read from the platform's own job API. Tracking parameters and redirect wrappers are removed from the link first.
-                  </p>
-                </div>
-                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
-                  <strong className="text-emerald-900 text-sm block mb-1">2. The posting page</strong>
-                  <p>
-                    Other career pages are fetched and read for a Schema.org <code>JobPosting</code>, embedded page data, or the visible text. When the API or page already gives a clean title, company, location and description, the job is saved without using Gemini.
-                  </p>
-                </div>
-                <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-                  <strong className="text-purple-900 text-sm block mb-1">3. Gemini</strong>
-                  <p>
-                    Otherwise Gemini reads the page text, or opens the page itself, and fills in the fields. These steps count toward your daily AI limit.
-                  </p>
-                </div>
-                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
-                  <strong className="text-amber-900 text-sm block mb-1">4. Needs review</strong>
-                  <p>
-                    If nothing could read the posting (LinkedIn, Glassdoor and other sites that block automated reading), the job is saved with what the link shows and marked <strong>Needs review</strong>. Fields it could not read say Unknown. Open the posting and click the one-click capture bookmark to fill it in.
-                  </p>
-                </div>
+              <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                <strong className="text-emerald-900 text-sm block mb-1">2. The posting page</strong>
+                <p>
+                  Other career pages are fetched and read for a Schema.org <code>JobPosting</code>, embedded page data, or the visible text. When the API or page already gives a clean title, company, location and description, the job is saved without using Gemini.
+                </p>
               </div>
-              <div className="pt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsInfoOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+                <strong className="text-purple-900 text-sm block mb-1">3. Gemini</strong>
+                <p>
+                  Otherwise Gemini reads the page text, or opens the page itself, and fills in the fields. These steps count toward your daily AI limit.
+                </p>
+              </div>
+              <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
+                <strong className="text-amber-900 text-sm block mb-1">4. Needs review</strong>
+                <p>
+                  If nothing could read the posting (LinkedIn, Glassdoor and other sites that block automated reading), the job is saved with what the link shows and marked <strong>Needs review</strong>. Fields it could not read say Unknown. Open the posting and click the one-click capture bookmark to fill it in.
+                </p>
               </div>
             </div>
-          </div>,
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsInfoOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </Modal>,
           document.body
         )}
     </header>
