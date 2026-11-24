@@ -26,6 +26,7 @@ spreadsheet_data.json
 .spec/DEBUG_PACKET.md
 .spec/BRIEFING_PACKET.md
 .spec/STATUS_BATCH.jsonl
+.spec/.events/
 .spec/.upshift-auth.json
 .spec/.slice-checkpoint
 .spec/.vibe-checkpoint.json
