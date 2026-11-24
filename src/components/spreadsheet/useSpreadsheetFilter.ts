@@ -2,6 +2,14 @@ import { useState, useMemo } from 'react';
 import { JobRecord, JobStatus } from '../../types';
 import { DEFAULT_VISIBLE_STATUSES, STATUS_ORDER } from '../../lib/statusMeta';
 import { jobMatchesSearch } from '../../lib/jobSearch';
+import {
+  formatMicroSalary,
+  getCleanCityLocation,
+  getWorkArrangementMeta,
+  needsManualReview,
+  WorkArrangementType,
+} from '../../lib/formatHelpers';
+import type { TriStateFilter } from '../FilterBar';
 
 export type SortField = 'dateApplied' | 'company' | 'jobTitle' | 'salary';
 export type SortOrder = 'asc' | 'desc';
@@ -22,6 +30,24 @@ export const STATUS_PRIORITY_ORDER: Record<JobStatus, number> = {
   Rejected: 5,
   Declined: 6,
 };
+
+export interface SpreadsheetFilterState {
+  searchQuery: string;
+  selectedStatuses: Set<JobStatus>;
+  workArrangement: WorkArrangementType | '';
+  industry: string;
+  location: string;
+  seniority: string;
+  salary: TriStateFilter;
+  notes: TriStateFilter;
+  needsReview: TriStateFilter;
+}
+
+export interface SpreadsheetFilterOptions {
+  industries: string[];
+  locations: string[];
+  seniorities: string[];
+}
 
 export function getJobAgeTimestamp(job: JobRecord): number {
   const raw = job.dateApplied || job.dateAdded || job.createdAt;
@@ -131,11 +157,119 @@ export function getNextSortState(
   };
 }
 
+export function isDefaultStatusSelection(selectedStatuses: Set<JobStatus>): boolean {
+  return (
+    selectedStatuses.size === DEFAULT_VISIBLE_STATUSES.length &&
+    DEFAULT_VISIBLE_STATUSES.every((status) => selectedStatuses.has(status))
+  );
+}
+
+export function countActiveSpreadsheetFilters(
+  state: Omit<SpreadsheetFilterState, 'searchQuery'>
+): number {
+  let count = 0;
+  if (!isDefaultStatusSelection(state.selectedStatuses)) count += 1;
+  if (state.workArrangement) count += 1;
+  if (state.industry) count += 1;
+  if (state.location) count += 1;
+  if (state.seniority) count += 1;
+  if (state.salary !== 'any') count += 1;
+  if (state.notes !== 'any') count += 1;
+  if (state.needsReview !== 'any') count += 1;
+  return count;
+}
+
+export function extractSpreadsheetFilterOptions(jobs: JobRecord[]): SpreadsheetFilterOptions {
+  const industries = new Set<string>();
+  const locations = new Set<string>();
+  const seniorities = new Set<string>();
+
+  for (const job of jobs) {
+    const ind = (job.industry || '').trim();
+    if (ind) industries.add(ind);
+
+    const city = getCleanCityLocation(job.location);
+    if (city) locations.add(city);
+
+    const sen = (job.positionMetadata?.seniority || '').trim();
+    if (sen) seniorities.add(sen);
+  }
+
+  return {
+    industries: Array.from(industries).sort((a, b) => a.localeCompare(b)),
+    locations: Array.from(locations).sort((a, b) => a.localeCompare(b)),
+    seniorities: Array.from(seniorities).sort((a, b) => a.localeCompare(b)),
+  };
+}
+
+function matchesTriState(value: boolean, filter: TriStateFilter): boolean {
+  if (filter === 'yes') return value;
+  if (filter === 'no') return !value;
+  return true;
+}
+
+export function matchesSpreadsheetFilters(
+  job: JobRecord,
+  state: SpreadsheetFilterState
+): boolean {
+  // A typed search covers every status; the status filter applies only when not searching.
+  if (state.searchQuery.trim()) {
+    if (!jobMatchesSearch(job, state.searchQuery)) {
+      return false;
+    }
+  } else if (!state.selectedStatuses.has(job.status)) {
+    return false;
+  }
+
+  if (state.workArrangement) {
+    const arrangement = getWorkArrangementMeta(job.location, job.positionMetadata).type;
+    if (arrangement !== state.workArrangement) {
+      return false;
+    }
+  }
+
+  if (state.industry && (job.industry || '').trim() !== state.industry) {
+    return false;
+  }
+
+  if (state.location && getCleanCityLocation(job.location) !== state.location) {
+    return false;
+  }
+
+  if (state.seniority && (job.positionMetadata?.seniority || '').trim() !== state.seniority) {
+    return false;
+  }
+
+  if (state.salary !== 'any') {
+    const hasSalary = formatMicroSalary(job.salary, job.salaryMin, job.salaryMax).isReal;
+    if (!matchesTriState(hasSalary, state.salary)) return false;
+  }
+
+  if (state.notes !== 'any') {
+    const hasNotes = Boolean(job.notes && job.notes.trim().length > 0);
+    if (!matchesTriState(hasNotes, state.notes)) return false;
+  }
+
+  if (state.needsReview !== 'any') {
+    const isReview = needsManualReview(job.extractedVia);
+    if (!matchesTriState(isReview, state.needsReview)) return false;
+  }
+
+  return true;
+}
+
 export function useSpreadsheetFilter(jobs: JobRecord[]) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<Set<JobStatus>>(
     () => new Set(DEFAULT_VISIBLE_STATUSES)
   );
+  const [workArrangement, setWorkArrangement] = useState<WorkArrangementType | ''>('');
+  const [industry, setIndustry] = useState('');
+  const [location, setLocation] = useState('');
+  const [seniority, setSeniority] = useState('');
+  const [salary, setSalary] = useState<TriStateFilter>('any');
+  const [notes, setNotes] = useState<TriStateFilter>('any');
+  const [needsReview, setNeedsReview] = useState<TriStateFilter>('any');
   const [sortField, setSortField] = useState<SortField>(DEFAULT_SORT_FIELD);
   const [sortOrder, setSortOrder] = useState<SortOrder>(DEFAULT_SORT_ORDER);
 
@@ -159,23 +293,74 @@ export function useSpreadsheetFilter(jobs: JobRecord[]) {
     setSelectedStatuses(new Set());
   };
 
+  const resetStatusesToDefault = () => {
+    setSelectedStatuses(new Set(DEFAULT_VISIBLE_STATUSES));
+  };
+
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setSelectedStatuses(new Set(DEFAULT_VISIBLE_STATUSES));
+    setWorkArrangement('');
+    setIndustry('');
+    setLocation('');
+    setSeniority('');
+    setSalary('any');
+    setNotes('any');
+    setNeedsReview('any');
+  };
+
   const handleSort = (field: SortField) => {
     const next = getNextSortState(sortField, sortOrder, field);
     setSortField(next.field);
     setSortOrder(next.order);
   };
 
+  const filterOptions = useMemo(() => extractSpreadsheetFilterOptions(jobs), [jobs]);
+
+  const activeFilterCount = useMemo(
+    () =>
+      countActiveSpreadsheetFilters({
+        selectedStatuses,
+        workArrangement,
+        industry,
+        location,
+        seniority,
+        salary,
+        notes,
+        needsReview,
+      }),
+    [selectedStatuses, workArrangement, industry, location, seniority, salary, notes, needsReview]
+  );
+
   const filteredAndSortedJobs = useMemo(() => {
+    const state: SpreadsheetFilterState = {
+      searchQuery,
+      selectedStatuses,
+      workArrangement,
+      industry,
+      location,
+      seniority,
+      salary,
+      notes,
+      needsReview,
+    };
     return jobs
-      .filter((job) => {
-        // A typed search covers every status; the status filter applies only when not searching.
-        if (!searchQuery.trim()) {
-          return selectedStatuses.has(job.status);
-        }
-        return jobMatchesSearch(job, searchQuery);
-      })
+      .filter((job) => matchesSpreadsheetFilters(job, state))
       .sort((a, b) => compareJobsForSpreadsheet(a, b, sortField, sortOrder));
-  }, [jobs, selectedStatuses, searchQuery, sortField, sortOrder]);
+  }, [
+    jobs,
+    searchQuery,
+    selectedStatuses,
+    workArrangement,
+    industry,
+    location,
+    seniority,
+    salary,
+    notes,
+    needsReview,
+    sortField,
+    sortOrder,
+  ]);
 
   return {
     searchQuery,
@@ -184,6 +369,24 @@ export function useSpreadsheetFilter(jobs: JobRecord[]) {
     handleToggleStatus,
     handleSelectAllStatuses,
     handleSelectNoneStatuses,
+    resetStatusesToDefault,
+    workArrangement,
+    setWorkArrangement,
+    industry,
+    setIndustry,
+    location,
+    setLocation,
+    seniority,
+    setSeniority,
+    salary,
+    setSalary,
+    notes,
+    setNotes,
+    needsReview,
+    setNeedsReview,
+    filterOptions,
+    activeFilterCount,
+    resetAllFilters,
     sortField,
     sortOrder,
     handleSort,
