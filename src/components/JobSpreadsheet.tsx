@@ -49,11 +49,31 @@ export const JobSpreadsheet = ({
     handleToggleStatus,
     handleSelectAllStatuses,
     handleSelectNoneStatuses,
+    resetStatusesToDefault,
+    workArrangement,
+    setWorkArrangement,
+    industry,
+    setIndustry,
+    location,
+    setLocation,
+    seniority,
+    setSeniority,
+    salary,
+    setSalary,
+    notes,
+    setNotes,
+    needsReview,
+    setNeedsReview,
+    filterOptions,
+    activeFilterCount,
+    resetAllFilters,
     sortField,
     sortOrder,
     handleSort,
     filteredAndSortedJobs,
   } = useSpreadsheetFilter(jobs);
+
+  const hasAnyFilter = activeFilterCount > 0 || searchQuery.trim().length > 0;
 
   const closeRowActions = () => {
     setOpenActionRowId(null);
@@ -104,6 +124,24 @@ export const JobSpreadsheet = ({
         onToggleStatus={handleToggleStatus}
         onSelectAllStatuses={handleSelectAllStatuses}
         onSelectNoneStatuses={handleSelectNoneStatuses}
+        onResetStatusesToDefault={resetStatusesToDefault}
+        workArrangement={workArrangement}
+        onWorkArrangementChange={setWorkArrangement}
+        industry={industry}
+        onIndustryChange={setIndustry}
+        location={location}
+        onLocationChange={setLocation}
+        seniority={seniority}
+        onSeniorityChange={setSeniority}
+        salary={salary}
+        onSalaryChange={setSalary}
+        notes={notes}
+        onNotesChange={setNotes}
+        needsReview={needsReview}
+        onNeedsReviewChange={setNeedsReview}
+        filterOptions={filterOptions}
+        activeFilterCount={activeFilterCount}
+        onResetAllFilters={resetAllFilters}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onImportJobs={onImportJobs}
@@ -118,8 +156,17 @@ export const JobSpreadsheet = ({
             <Inbox className="w-8 h-8 text-indigo-400 mx-auto" />
             <p className="font-semibold text-slate-600 text-sm">No matching job records found</p>
             <p className="text-xs text-slate-400">
-              Try adjusting your status filter or search query.
+              Try adjusting your filters or search query.
             </p>
+            {hasAnyFilter && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="mt-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 border border-indigo-200 rounded-lg bg-indigo-50/60 hover:bg-indigo-50 transition-colors cursor-pointer"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         ) : (
           filteredAndSortedJobs.map((job) => (
@@ -172,8 +219,17 @@ export const JobSpreadsheet = ({
                     <Inbox className="w-8 h-8 text-indigo-400" />
                     <p className="font-semibold text-slate-600">No matching job records found</p>
                     <p className="text-xs text-slate-400">
-                      Try adjusting your status filter or paste a new job posting URL above.
+                      Try adjusting your filters or paste a new job posting URL above.
                     </p>
+                    {hasAnyFilter && (
+                      <button
+                        type="button"
+                        onClick={resetAllFilters}
+                        className="mt-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 border border-indigo-200 rounded-lg bg-indigo-50/60 hover:bg-indigo-50 transition-colors cursor-pointer"
+                      >
+                        Clear filters
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -209,6 +265,11 @@ export const JobSpreadsheet = ({
             Showing <strong className="text-slate-900 font-bold">{filteredAndSortedJobs.length}</strong> of{' '}
             <strong className="text-slate-900 font-bold">{jobs.length}</strong> jobs
           </span>
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filters'} active
+            </span>
+          )}
           {searchQuery && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 truncate max-w-[180px]">
               &ldquo;{searchQuery}&rdquo;

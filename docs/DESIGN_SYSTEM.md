@@ -202,6 +202,12 @@ Label: eyebrow token (4). Value: `text-xs font-semibold text-slate-800`. Missing
 **Pill / tag**
 `text-[10px] font-semibold px-2 py-0.5 rounded-full border` + a semantic tint (3.5).
 
+**Filters** (`src/components/FilterBar.tsx`, `.ui-filter-*` in `src/index.css`)
+Follows the Harness UI Filters pattern:
+- Toolbar row (`.ui-filter-bar`): search input, `Filters` trigger (`.ui-filter-trigger` with `SlidersHorizontal` icon, `aria-expanded`, and active count `Filters (N)`), removable active filter chips (`.ui-pill.ui-pill--active` with `Check` and `X`), and a `Clear` ghost button shown only when a filter or search query is active.
+- Collapsible panel (`.ui-filter-panel`, rendered only when open): groups (`.ui-filter-group` separated by a `slate-200` top divider) for facet `<select>` pills (`.ui-filter-select`, `field-sizing: content` capped at `14rem`), status toggle pills (`.ui-pill`), and tri-state toggle buttons (`.ui-filter-toggle`, cycling `any` → `yes` with `Check` + accent tint → `no` with `Minus` + mid-tone → `any`).
+- Responsive sizing: `44px` (`16px` text) below `640px`, stepping down to `32px` (`13px` text) at `>= 640px`. Focus uses `2px` `indigo-500` outline (`outline-offset: 2px`).
+
 **Card / row**
 `bg-white border border-slate-200 rounded-xl shadow-2xs`. A card that represents a pipeline item shows its status with the status badge or dot. If a stronger cue is needed, use `border-l-4` + `STATUS_META[status].borderAccent`.
 

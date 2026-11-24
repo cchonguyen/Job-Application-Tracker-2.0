@@ -61,7 +61,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 
 ### 4.3 Tracking
 - Statuses: **Saved, Applied, Interviewing, Offer, Accepted, Rejected, Declined**. Each change is appended to the job's status history with a timestamp; moving to Applied sets the applied date.
-- Spreadsheet view with search, filters, column sort (sorting turns off status grouping), compact and full layouts, and stacked cards on mobile. Search covers every status and matches company, title, team, location, industry, notes, posting URL, summary, status and skills. The status filter applies only when the search box is empty.
+- Spreadsheet view with search, a collapsible Harness UI Filters bar (status pills, work mode, industry, location, and seniority selects, plus salary, notes, and needs-review tri-state toggles, removable active chips, and Clear), column sort (sorting turns off status grouping), compact and full layouts, and stacked cards on mobile. Search covers every status and matches company, title, team, location, industry, notes, posting URL, summary, status and skills. The status filter applies only when the search box is empty.
 - Job detail drawer: summary, metadata, status timeline, notes, applied date, edit and delete.
 - Analytics bar: pipeline counts, callback rate and salary ranges.
 - Import and export as JSON or CSV; optional Google Sheets sync (4.6).
