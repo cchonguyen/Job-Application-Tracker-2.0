@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { User } from 'firebase/auth';
 import type { JobRecord } from '../types';
 import {
   initAuth,
@@ -37,7 +36,7 @@ export interface ConnectedSheet {
 }
 
 export function useGoogleSheetsSync(jobs: JobRecord[]) {
-  const [user, setUser] = useState<User | GoogleAuthUser | null>(null);
+  const [user, setUser] = useState<GoogleAuthUser | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [connectedSheet, setConnectedSheet] = useState<ConnectedSheet | null>(() => {
@@ -112,9 +111,9 @@ export function useGoogleSheetsSync(jobs: JobRecord[]) {
       }
       return false;
     } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') {
+      if (err?.message?.includes('closed')) {
         setLastError('Sign-in window was closed before finishing authentication.');
-      } else if (err.code === 'auth/unauthorized-domain') {
+      } else if (err?.message?.includes('origin') || err?.message?.includes('redirect_uri')) {
         setLastError('This site is not an authorized domain for Google sign-in yet. Add it in Google Cloud, then reload.');
       } else {
         setLastError(err.message || 'Google Sign-in failed');

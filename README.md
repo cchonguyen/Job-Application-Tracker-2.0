@@ -65,7 +65,7 @@ Upgrading a database created before v0.6.0? Follow [`docs/MIGRATIONS.md`](docs/M
 
 ### Google Sheets sync (optional)
 
-Sheets sync runs in the browser using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in [`firebase-applet-config.json`](firebase-applet-config.json) if populated). On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud (and to Firebase **Authentication → Settings → Authorized domains** if using optional Firebase config). See PRD 4.6 for how sync behaves.
+Sheets sync runs in the browser using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config`. On a new deployment, add your app URL to that client's **Authorized JavaScript origins** in Google Cloud. See PRD 4.6 for how sync behaves.
 
 ### Gmail status suggestions (optional, owner only)
 
@@ -103,7 +103,7 @@ The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dis
    - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID`, `EXTRACTION_DAILY_LIMIT`, and `ALLOWED_USER_EMAILS`. `NODE_ENV` comes from `wrangler.toml`.
    - For Gmail suggestions, also `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` and `GMAIL_BRIDGE_OWNER_EMAIL` ([`docs/GMAIL_BRIDGE.md`](docs/GMAIL_BRIDGE.md)).
 4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate. (`workers_dev` and `preview_urls` are `false` in `wrangler.toml` so the Worker is only reachable via the custom domain.)
-5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins**, and Firebase **Authorized domains** (see above).
+5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins** (see above).
 
 `WORKERS_CI_COMMIT_SHA` is set by Cloudflare's build and feeds the version line in the Settings menu. Logs: Worker → **Observability**.
 

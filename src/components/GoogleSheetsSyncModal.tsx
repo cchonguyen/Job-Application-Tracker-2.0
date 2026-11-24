@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   LogOut,
 } from 'lucide-react';
-import type { User } from 'firebase/auth';
 import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { JobRecord } from '../types';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
@@ -22,7 +21,7 @@ import type { GoogleSheetSummary } from '../lib/googleSheets';
 interface GoogleSheetsSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: User | GoogleAuthUser | null;
+  user: GoogleAuthUser | null;
   hasToken: boolean;
   isLoggingIn: boolean;
   connectedSheet: ConnectedSheet | null;
@@ -347,7 +346,7 @@ export const GoogleSheetsSyncModal = ({
                     <span>This site is not authorized for Google sign-in</span>
                   </div>
                   <p className="text-slate-600 leading-relaxed">
-                    Add this domain to the OAuth client's Authorized JavaScript origins in Google Cloud (and to Firebase Authorized domains if you use the Firebase fallback), then reload this page.
+                    Add this domain to the OAuth client's Authorized JavaScript origins in Google Cloud, then reload this page.
                   </p>
 
                   <div className="space-y-1">

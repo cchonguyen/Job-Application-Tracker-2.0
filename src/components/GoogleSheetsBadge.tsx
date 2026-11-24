@@ -8,11 +8,11 @@ import {
   ChevronDown,
   Settings,
 } from 'lucide-react';
-import type { User } from 'firebase/auth';
+import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
 
 interface GoogleSheetsBadgeProps {
-  user: User | null;
+  user: GoogleAuthUser | null;
   hasToken: boolean;
   connectedSheet: ConnectedSheet | null;
   autoSync: boolean;

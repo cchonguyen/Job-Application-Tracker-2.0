@@ -25,7 +25,6 @@ import { BookmarkletModal } from './BookmarkletModal';
 import { PortalDropdown } from './PortalDropdown';
 import { useAccount } from './AuthGate';
 import { APP_VERSION, APP_COMMIT, formatBuildTime } from '../lib/appVersion';
-import type { User } from 'firebase/auth';
 import type { GoogleAuthUser } from '../lib/googleAuth';
 import type { ConnectedSheet } from '../hooks/useGoogleSheetsSync';
 
@@ -40,7 +39,7 @@ interface HeaderActionPanelProps {
   onThemeModeChange: (mode: ThemeMode) => void;
   onThemeAccentChange: (accent: ThemeAccent) => void;
   googleSheetsProps?: {
-    user: User | GoogleAuthUser | null;
+    user: GoogleAuthUser | null;
     hasToken: boolean;
     connectedSheet: ConnectedSheet | null;
     autoSync: boolean;

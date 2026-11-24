@@ -32,7 +32,7 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
 | Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
 | Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. The Render web service (`render.yaml`) still works as an alternative host. Both build with Bun |
-| Optional | Google Sheets sync from the browser (4.6), via `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in `firebase-applet-config.json`) |
+| Optional | Google Sheets sync from the browser (4.6), via `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` |
 
 ---
 
@@ -80,10 +80,10 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - The **Docs updated** check fails a PR that changes app files without changing a doc, and a `schema.sql` change without a `docs/MIGRATIONS.md` entry (`AGENTS.md`).
 
 ### 4.6 Google Sheets sync (`src/lib/googleSheets.ts`, `src/hooks/useGoogleSheetsSync.ts`)
-- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in `firebase-applet-config.json`, using the Google Identity Services popup, with Firebase Auth's popup as an optional fallback when Firebase config is populated). The access token is kept in memory only.
+- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access in Google's own popup (Google Identity Services) using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config`. The access token is kept in memory only, so a page reload asks again.
 - The user picks an existing spreadsheet or creates one. Sync writes a header plus one row per job to the first tab from `A1`, prefixes formula trigger characters (`=`, `+`, `-`, `@`, tab, CR) with `'` to prevent formula injection, and clears leftover rows below, so the tab mirrors the tracker and manual edits there are overwritten.
 - Auto-sync (optional) re-syncs shortly after any change to the job list. The chosen sheet and the auto-sync setting are remembered per browser in `localStorage`.
-- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins** (and in the Firebase project's **Authorized domains** if using Firebase fallback).
+- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins**.
 
 ### 4.7 Gmail status suggestions (`src/lib/emailSignals.ts`, `apps-script/GmailBridge.gs`)
 - A personal feature for the account named in `GMAIL_BRIDGE_OWNER_EMAIL`. Every other account gets `enabled: false` and never sees the owner's mail. Setup steps are in `docs/GMAIL_BRIDGE.md`.
@@ -156,7 +156,7 @@ interface JobRecord {
 |---|---|---|
 | `GEMINI_API_KEY` | Recommended | Gemini extraction (Tiers 3–4 and pasted text) |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
-| `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
+| `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase; also required for Google Sheets sync |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
 | `ALLOWED_USER_EMAILS` | Optional | Comma-separated Google account emails allowed to call `/api`; when empty, any Google account may sign in |
 | `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` | Optional | The Apps Script web app's `/exec` URL and its key (4.7). Store both as Secrets |
