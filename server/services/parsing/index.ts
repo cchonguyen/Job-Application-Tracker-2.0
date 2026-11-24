@@ -86,7 +86,7 @@ export class JobParsingEngine {
   ];
 
   /**
-   * Registers a new ATS provider strategy (e.g. SmartRecruiters, Jobvite)
+   * Adds an ATS provider after the built-in ones (used by tests; Jobvite or Breezy would plug in here).
    */
   public registerProvider(provider: AtsProvider): void {
     this.providers.push(provider);
@@ -230,7 +230,7 @@ export class JobParsingEngine {
       diagnosticSteps[diagnosticSteps.length - 1].details = isSpaShell
         ? `HTML received (Status ${scraped.rawHtmlStatus}), but detected a client-side Single-Page Application (SPA) shell with no pre-rendered DOM text or OpenGraph meta tags.`
         : `HTML received (Status ${scraped.rawHtmlStatus}). ${
-            scraped.jsonLd ? 'Found JSON-LD schema.org/JobPosting!' : 'Extracted OpenGraph & DOM body.'
+            scraped.jsonLd ? 'Found a Schema.org JobPosting (JSON-LD).' : 'Extracted OpenGraph tags and page text.'
           }`;
     } catch (err: any) {
       scrapeError = err.message;
@@ -257,7 +257,7 @@ export class JobParsingEngine {
 
       if (fastPathResult) {
         diagnosticSteps.push({
-          tier: 'Tier 1.5 (Fast-Path Normalizer)',
+          tier: 'Tier 2.5 (Fast-Path Normalizer)',
           name: 'Strict Fast-Path Normalizer (Schema.org)',
           status: 'success',
           details:
@@ -340,7 +340,7 @@ ${scraped.cleanedText}
       }
     }
 
-    // WAF / Auth-Wall Short-Circuit (Decision 2 & Refinement 6)
+    // Bot-wall / login-wall short-circuit: skip Tier 4 (which would hang for up to 40 s) and save a Needs review stub
     if (isWafOrAuthWallBlocked(targetUrl, scraped, scrapeError)) {
       diagnosticSteps.push({
         tier: 'Tier 4 (WAF Short-Circuit)',

@@ -4,7 +4,7 @@ import type { JobScope } from '../services/storage/index.ts';
 
 const DEFAULT_DAILY_LIMIT = 30;
 
-/** Extractions each user may run per UTC day. EXTRACTION_DAILY_LIMIT overrides; 0 or less turns the limit off. */
+/** Gemini extractions each user may run per UTC day (company-fact lookups get the same number). EXTRACTION_DAILY_LIMIT overrides; 0 or less turns the limit off. */
 export function dailyExtractionLimit(): number {
   const raw = process.env.EXTRACTION_DAILY_LIMIT?.trim();
   if (!raw) return DEFAULT_DAILY_LIMIT;
@@ -52,7 +52,8 @@ let warnedFallback = false;
  * Counts one use of `kind` for the signed-in user; false once today's allowance is spent. With Supabase the count
  * lives in the database (`take_daily_usage`), so it holds across restarts and across the many short-lived copies of
  * the server that Cloudflare runs. If that call fails (for example the migration has not been applied yet) the count
- * falls back to this process's memory rather than blocking the user.
+ * falls back to this process's memory rather than blocking the user. The extraction pipeline calls it for 'extraction'
+ * only right before a Gemini step, so ATS-API, fast-path and bot-wall results cost nothing.
  */
 export async function takeDailyUsage(scope: JobScope, kind: UsageKind): Promise<boolean> {
   const limit = dailyExtractionLimit();
@@ -70,31 +71,6 @@ export async function takeDailyUsage(scope: JobScope, kind: UsageKind): Promise<
   }
   return data;
 }
-
-/**
- * Every extraction can spend Gemini quota and make the server fetch a URL, so each signed-in user gets a daily
- * allowance.
- */
-export const extractionLimit: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const scope = c.get('jobScope');
-  // Saving a job the user already extracted (after a duplicate warning) runs no extraction.
-  const body = await c.req.json().catch(() => ({}));
-  const savesConfirmedCandidate = Boolean(body?.candidateJob && body?.confirmDuplicate);
-  if (!scope || savesConfirmedCandidate) {
-    await next();
-    return;
-  }
-  if (!(await takeDailyUsage(scope, 'extraction'))) {
-    return c.json(
-      {
-        success: false,
-        error: `Daily limit reached: you can add ${dailyExtractionLimit()} jobs by link or pasted text per day. Try again tomorrow.`,
-      },
-      429
-    );
-  }
-  await next();
-};
 
 /**
  * Company-fact lookups can run a Google-Search-grounded Gemini call, so they get their own daily allowance per user.

@@ -10,19 +10,23 @@ Personal job-application tracker that ingests posting URLs (or pasted descriptio
 | This README | Setup, deployment and scripts |
 | [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md) | SQL to bring an existing production database up to date |
 | [`docs/GMAIL_BRIDGE.md`](docs/GMAIL_BRIDGE.md) | Connecting your own Gmail for status suggestions |
+| [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Colors, status styling, type, component patterns and copy rules |
+| [`design-system/profile.md`](design-system/profile.md) | This app's Harness UI profile (signature hue, density, voice) |
 | [`AGENTS.md`](AGENTS.md) | How to contribute: docs, schema and versioning rules |
+| [`.spec/`](.spec/) | Harness state for Claude Code: overview, scope contract, decisions log, slice progress and session handoff |
 
 The docs change in the same PR as the code they describe; the **Docs updated** check enforces it.
 
 ## Features
 
-- Paste a Greenhouse, Lever, or career-page URL to extract company, title, location, salary, and metadata
+- Paste a job posting URL (Greenhouse, Lever, Workable, Ashby, Workday, SmartRecruiters and more, or any career page) to extract company, title, location, salary, and metadata
 - Manual text fallback for SPA / bot-protected portals (e.g. Darwinbox)
 - One-click capture bookmarklet (Settings › One-click capture) that saves the page you are viewing, including Darwinbox, Workday and LinkedIn
 - Track status: Saved → Applied → Interviewing → Offer → Accepted / Rejected / Declined
 - Search across all statuses, filter, sort, edit, notes, and CSV/JSON export
-- Import previously exported JSON or CSV (Options → Import JSON / CSV)
-- ATS debugger for multi-tier extraction diagnostics
+- Import previously exported JSON or CSV (Data → Import CSV/JSON above the table)
+- ATS diagnostic (Settings › ATS diagnostic) that shows what each extraction tier returned for a URL
+- Optional Google Sheets sync, and owner-only Gmail status suggestions
 - Google sign-in: each account sees only its own applications (Supabase Auth + Postgres row-level security)
 - Free persistent storage via **Supabase** (Postgres), with local JSON fallback for offline/dev
 
@@ -71,7 +75,7 @@ Deploy [`apps-script/GmailBridge.gs`](apps-script/GmailBridge.gs) as a web app i
 
 - The server queries Postgres as the signed-in user, so the row-level security policies in `schema.sql` are what keep accounts apart.
 - Set `ALLOWED_USER_EMAILS` (comma-separated emails) to restrict API access to specific Google accounts; leave it empty to allow any Google account.
-- Each user can add `EXTRACTION_DAILY_LIMIT` jobs by link or pasted text per day (default 30), since each one can spend Gemini quota. The counts are kept in Supabase (`daily_usage`), so they hold on Cloudflare too, and `take_daily_usage` validates counter kinds and limits.
+- Each user gets `EXTRACTION_DAILY_LIMIT` Gemini extractions per UTC day (default 30), plus the same number of company-fact lookups. Only steps that call Gemini count; once the limit is reached, jobs are still saved without Gemini, from ATS data or the deterministic parsers (which mark them **Needs review**). The counts are kept in Supabase (`daily_usage`), so they hold on Cloudflare too, and `take_daily_usage` validates counter kinds and limits.
 - Job links are fetched only if they resolve to public addresses; private, loopback and cloud-metadata addresses are refused, including via redirects.
 
 ## Scripts
@@ -83,7 +87,8 @@ Deploy [`apps-script/GmailBridge.gs`](apps-script/GmailBridge.gs) as a web app i
 | `bun run build` | Production client + server bundle |
 | `bun run start` | Run production server from `dist/` |
 | `bun run test` | Unit tests (extraction, duplicates, import, sign-in middleware, rate limits, safe fetching, and more) |
-| `bun run lint` | Typecheck with `tsc --noEmit` |
+| `bun run lint` / `bun run typecheck` | Typecheck with `tsc --noEmit` (both run the same check) |
+| `bun run test:watch` | Unit tests in watch mode |
 
 ## Deploy on Cloudflare
 
@@ -96,6 +101,7 @@ The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dis
    - Leave the production branch as `main`. Every push to `main` then builds and deploys.
 3. Worker → **Settings** → **Variables and Secrets**, add each as type **Secret** (secrets always survive deploys; `keep_vars` in `wrangler.toml` also keeps plain-text ones):
    - `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GOOGLE_OAUTH_CLIENT_ID`, `EXTRACTION_DAILY_LIMIT`, and `ALLOWED_USER_EMAILS`. `NODE_ENV` comes from `wrangler.toml`.
+   - For Gmail suggestions, also `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` and `GMAIL_BRIDGE_OWNER_EMAIL` ([`docs/GMAIL_BRIDGE.md`](docs/GMAIL_BRIDGE.md)).
 4. Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**, e.g. `jobs.example.com` (the domain's DNS must be on Cloudflare, and no other DNS record may already use that name). Cloudflare creates the DNS record and certificate. (`workers_dev` and `preview_urls` are `false` in `wrangler.toml` so the Worker is only reachable via the custom domain.)
 5. Add that address to the sign-in allow-lists: Supabase **Site URL** and **Redirect URLs**, the Google OAuth client's **Authorized JavaScript origins**, and Firebase **Authorized domains** (see above).
 
@@ -118,7 +124,7 @@ Environment variables:
 - `SUPABASE_URL` = your Supabase project URL
 - `SUPABASE_ANON_KEY` = Supabase **anon / publishable** key. Required in production: the API returns 503 without Supabase.
 - `GOOGLE_OAUTH_CLIENT_ID` = optional; the Google client ID from Supabase's Google provider, so sign-in shows your app's name
-- `EXTRACTION_DAILY_LIMIT` = optional per-user daily extraction limit (default 30)
+- `EXTRACTION_DAILY_LIMIT` = optional per-user daily Gemini extraction limit (default 30)
 - `ALLOWED_USER_EMAILS` = optional comma-separated Google account emails allowed to call `/api`
 
 `PORT` and `RENDER_GIT_COMMIT` are set by Render automatically; the commit feeds the version line in the Settings menu.

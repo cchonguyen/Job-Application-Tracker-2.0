@@ -242,7 +242,7 @@ export async function scrapeHtmlWithCheerio(urlStr: string): Promise<ScrapedHtml
     });
   }
 
-  // 3. Embedded Greenhouse / Ashby discovery (Refinement 9)
+  // 3. Embedded Greenhouse / Ashby discovery: custom career pages that embed a board's script, iframe or link
   let detectedAts: { type: string; board?: string; jobId?: string } | undefined;
 
   // Search Greenhouse script/iframe embeds

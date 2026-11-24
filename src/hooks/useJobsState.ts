@@ -88,7 +88,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error' 
         });
         if (data.shortCircuited || needsManualReview(data.candidateJob.extractedVia)) {
           showToast(
-            `Ingestion did not work properly (bot/login wall blocked reading). Flagged as a potential duplicate from the past 6 months.`,
+            `Could not read the full posting, and it may be a duplicate of an application from the past 6 months. Review the comparison to continue.`,
             'warning'
           );
         } else {
@@ -114,7 +114,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error' 
           const companyLabel =
             data.job.company && data.job.company !== 'Unknown Company' ? data.job.company : 'Career portal';
           showToast(
-            `Ingestion did not work properly: ${companyLabel} blocked automated reading. Saved as "Needs review" — use the 1-Click Bookmarklet on the job page to complete it.`,
+            `Could not read the full posting from ${companyLabel}. Saved as "Needs review". Open the job page and click the one-click capture bookmark to complete it.`,
             'warning'
           );
         } else {
@@ -129,7 +129,7 @@ export function useJobsState(showToast: (msg: string, type: 'success' | 'error' 
         throw new Error(data.error || 'Failed to extract job');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error occurred during autonomous ingestion', 'error');
+      showToast(err.message || 'Could not add this job.', 'error');
       throw err;
     } finally {
       setIsIngesting(false);

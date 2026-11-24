@@ -118,7 +118,7 @@ export const JobSpreadsheet = ({
             <Inbox className="w-8 h-8 text-indigo-400 mx-auto" />
             <p className="font-semibold text-slate-600 text-sm">No matching job records found</p>
             <p className="text-xs text-slate-400">
-              Try adjusting your status filter or search query.
+              Try a different search, or change the status filter.
             </p>
           </div>
         ) : (
@@ -172,7 +172,7 @@ export const JobSpreadsheet = ({
                     <Inbox className="w-8 h-8 text-indigo-400" />
                     <p className="font-semibold text-slate-600">No matching job records found</p>
                     <p className="text-xs text-slate-400">
-                      Try adjusting your status filter or paste a new job posting URL above.
+                      Try a different search, change the status filter, or paste a job posting URL above.
                     </p>
                   </div>
                 </td>

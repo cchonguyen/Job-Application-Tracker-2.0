@@ -812,7 +812,7 @@ export function detectAts(urlStr: string): AtsDetection {
   }
 
   // 31. Embedded Greenhouse or Ashby check on custom domains
-  // Per Refinement 9:
+  // Only explicit job-id parameters count, so a custom domain is never guessed to be a board:
   // - ?gh_jid= unconditionally matches Greenhouse
   // - ?ashby_jid= unconditionally matches Ashby
   // - ?job_id= matches Greenhouse only as a fallback

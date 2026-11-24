@@ -11,7 +11,7 @@
 - See `.env.example` and `README.md` for the full list.
 
 ## Current Build Status
-- **Live & Verified:** v0.7.x on Cloudflare Workers: link and paste ingest, bookmarklet capture, 4-tier extraction, duplicate warning, multi-user Google login.
-- **Harness:** Engine files synced to claude-harness-hub v3.2.0 (PR #29, 2026-11-12).
+- **Live & Verified:** v0.12.x on Cloudflare Workers (jobs.charliechonguyen.com): link and paste ingest, one-click capture bookmarklet (with in-place upgrade of **Needs review** stubs), multi-tier extraction (ATS APIs for nine platforms, Schema.org fast path, Gemini, bot-wall short-circuit), company facts, duplicate warning, Google sign-in per account, search across every status, Google Sheets sync, and owner-only Gmail status suggestions.
+- **Harness:** Engine files synced to claude-harness-hub v3.2.0 (PR #29, 2026-11-12; later engine-only syncs PRs #44, #46, #47).
 - **In Progress:** None
-- **Up Next:** Retire the Render deploy once Cloudflare has run cleanly for a week.
+- **Up Next:** Retire the Render deploy (Cloudflare has been the production host since 2026-10-20; Charlie to confirm).

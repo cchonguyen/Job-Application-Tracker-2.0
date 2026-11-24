@@ -158,7 +158,7 @@ export const GoogleSheetsSyncModal = ({
     if (!connectedSheet) return;
     setPendingConfirmAction({
       title: `Sync ${jobsCount} Applications to Google Sheets?`,
-      description: `This will update "${connectedSheet.name}" with the latest attributes, status durations, and application history from your local tracker.`,
+      description: `This will overwrite the first tab of "${connectedSheet.name}" with your current jobs: details, status, time in status, and notes.`,
       action: async () => {
         await onSyncNow();
       },
@@ -185,7 +185,7 @@ export const GoogleSheetsSyncModal = ({
                 Google Sheets Synchronization
               </h2>
               <p className="text-xs text-slate-500">
-                Keep your tracked applications continually synchronized with Google Drive
+                Copy your applications into a Google Sheet, on demand or automatically
               </p>
             </div>
           </div>
@@ -210,7 +210,7 @@ export const GoogleSheetsSyncModal = ({
                   <span>Google Account Required</span>
                 </div>
                 <p className="text-xs text-indigo-700">
-                  Sign in with Google to enable two-way sync with Google Sheets & Google Drive.
+                  Sign in with Google to copy your applications into a Google Sheet.
                 </p>
               </div>
 
@@ -338,16 +338,16 @@ export const GoogleSheetsSyncModal = ({
                 <span className="font-medium flex-1">{actionError || lastError}</span>
               </div>
 
-              {/* Render / External Domain Authorization Guide */}
+              {/* Shown when Google refuses sign-in because this site's domain is not authorized */}
               {(lastError?.includes('unauthorized-domain') ||
                 lastError?.includes('Domain authorization') ||
                 lastError?.includes('authorized domain')) && (
                 <div className="pt-2 border-t border-rose-200/70 text-[11px] text-rose-900 space-y-2 bg-white/60 p-2.5 rounded-lg">
                   <div className="font-semibold text-rose-950 flex items-center justify-between">
-                    <span>Render / External Host Authorization Required</span>
+                    <span>This site is not authorized for Google sign-in</span>
                   </div>
                   <p className="text-slate-600 leading-relaxed">
-                    Firebase Authentication requires externally hosted domains (such as Render) to be allowlisted in the Firebase project settings.
+                    Add this domain to the OAuth client's Authorized JavaScript origins in Google Cloud (and to Firebase Authorized domains if you use the Firebase fallback), then reload this page.
                   </p>
 
                   <div className="space-y-1">
@@ -442,7 +442,7 @@ export const GoogleSheetsSyncModal = ({
                         Automatic Real-time Sync
                       </div>
                       <div className="text-[11px] text-slate-500">
-                        Automatically update the Google Sheet whenever jobs are added, modified, or reordered
+                        Automatically update the Google Sheet shortly after jobs are added, edited, or deleted
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer select-none">
@@ -664,7 +664,7 @@ export const GoogleSheetsSyncModal = ({
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span>Google Workspace Sheets & Drive v4</span>
+            <span>Google Sheets API v4 and Drive API v3</span>
           </div>
           <button
             type="button"

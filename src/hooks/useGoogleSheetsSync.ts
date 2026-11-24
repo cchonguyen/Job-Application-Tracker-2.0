@@ -115,7 +115,7 @@ export function useGoogleSheetsSync(jobs: JobRecord[]) {
       if (err.code === 'auth/popup-closed-by-user') {
         setLastError('Sign-in window was closed before finishing authentication.');
       } else if (err.code === 'auth/unauthorized-domain') {
-        setLastError('Domain authorization in progress. Please refresh the page and try again.');
+        setLastError('This site is not an authorized domain for Google sign-in yet. Add it in Google Cloud, then reload.');
       } else {
         setLastError(err.message || 'Google Sign-in failed');
       }

@@ -1,5 +1,7 @@
 # Solution Architecture: Expanded Multi-Portal Job Link Scanning & Heuristic Engine
 
+> **Status: implemented and kept for history (2026-11-02, v0.8.0).** All five slices below shipped. `PRD.md` sections 2 and 4.1–4.4 describe how the app works now; where this blueprint and `PRD.md` differ, `PRD.md` wins. Of the platforms listed below, nine have Tier 1 API handlers (Greenhouse, Lever, Workable, Ashby, SmartRecruiters, Recruitee, Pinpoint, BambooHR, Workday); the rest are recognized by URL only and go through the Tier 2 scraper. Pasted text has no link, so it cannot upgrade a **Needs review** stub (Slice 5 below says it can).
+
 **Document Status**: Architecture Blueprint & Implementation Contract (v2.1 — Approved Design Decisions)  
 **Author**: Antigravity Solution Architect & Critical Reviewer  
 **Target Systems**: `src/lib/atsDetect.ts`, `src/lib/duplicateDetection.ts`, `src/lib/companyName.ts`, `src/lib/salary.ts`, `src/lib/formatHelpers.ts`, `src/lib/captureBookmarklet.ts`, `server/services/parsing/*`, `server/middleware/extractionLimit.ts`, `server/routes/extract.routes.ts`, `src/components/JobDetailModal.tsx`, `src/components/CapturePage.tsx`, `src/components/AtsDiagnosticModal.tsx`  
