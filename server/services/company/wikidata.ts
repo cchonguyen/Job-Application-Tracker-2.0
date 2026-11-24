@@ -1,4 +1,5 @@
 import type { CompanyFacts } from './types.ts';
+import { normalizeCompanyName as normalizeAtLevel } from '../../../src/lib/companyName';
 
 const API = 'https://www.wikidata.org/w/api.php';
 const TIMEOUT_MS = 5000;
@@ -43,15 +44,9 @@ async function getJson(params: Record<string, string>, fetchImpl: typeof fetch):
   return res.json();
 }
 
-/** Lowercase, drop punctuation and legal suffixes so "Stripe, Inc." matches "Stripe". */
+/** Lowercase, drop punctuation and legal suffixes so "Stripe, Inc." matches "Stripe". Uses the 'exact' level. */
 export function normalizeCompanyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9 ]+/g, ' ')
-    .replace(/\b(inc|incorporated|llc|ltd|limited|corp|corporation|co|company|gmbh|plc|sa|ag|bv|pbc)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeAtLevel(name, 'exact');
 }
 
 const activeClaims = (entity: Entity, prop: string): Claim[] =>
