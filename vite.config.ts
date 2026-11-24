@@ -7,9 +7,9 @@ import {defineConfig} from 'vite';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 
-// Render exposes the deployed commit as RENDER_GIT_COMMIT, Cloudflare as WORKERS_CI_COMMIT_SHA; fall back to local git.
+// Cloudflare exposes the deployed commit as WORKERS_CI_COMMIT_SHA (GITHUB_SHA in Actions); fall back to local git.
 function resolveCommit(): string {
-  const fromEnv = process.env.RENDER_GIT_COMMIT || process.env.WORKERS_CI_COMMIT_SHA || process.env.GITHUB_SHA;
+  const fromEnv = process.env.WORKERS_CI_COMMIT_SHA || process.env.GITHUB_SHA;
   if (fromEnv) return fromEnv.slice(0, 7);
   try {
     return execSync('git rev-parse --short=7 HEAD', {stdio: ['ignore', 'pipe', 'ignore']}).toString().trim();

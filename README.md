@@ -56,7 +56,7 @@ Use this in production so jobs survive redeploys and each user signs in with Goo
    - In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** (type *Web application*). Under **Authorized redirect URIs** add `https://YOUR_REF.supabase.co/auth/v1/callback`.
    - In Supabase **Authentication → Sign In / Providers → Google**, enable it and paste the client ID and secret.
    - In Supabase **Authentication → URL Configuration**, set **Site URL** to your app URL (e.g. `https://jobs.example.com`) and add it, plus `http://localhost:3000` for local testing, to **Redirect URLs**.
-5. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to `.env` locally and to your host's settings (Cloudflare or Render, below).
+5. Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` to `.env` locally and to your host's settings (Cloudflare, below).
 6. Optional but recommended: set `GOOGLE_OAUTH_CLIENT_ID` to the same Google client ID. Sign-in then runs in Google's popup on your site, so Google's account chooser names your app's address instead of `YOUR_REF.supabase.co`. Your app URL must be in the client's **Authorized JavaScript origins**.
 
 On startup the server logs `Persistence: Supabase with Google sign-in (…)` when configured.
@@ -85,7 +85,7 @@ Deploy [`apps-script/GmailBridge.gs`](apps-script/GmailBridge.gs) as a web app i
 | `bun run dev` | Node server with Vite middleware (port 3000) |
 | `npx wrangler dev` | After `bun run build`: run the Cloudflare Worker locally (port 8787) |
 | `bun run build` | Production client + server bundle |
-| `bun run start` | Run production server from `dist/` |
+| `bun run start` | Run the production Node server from `dist/` (local check of a production build) |
 | `bun run test` | Unit tests (extraction, duplicates, import, sign-in middleware, rate limits, safe fetching, and more) |
 | `bun run lint` / `bun run typecheck` | Typecheck with `tsc --noEmit` (both run the same check) |
 | `bun run test:watch` | Unit tests in watch mode |
@@ -108,28 +108,6 @@ The app runs as one Cloudflare Worker: Cloudflare serves the built app from `dis
 `WORKERS_CI_COMMIT_SHA` is set by Cloudflare's build and feeds the version line in the Settings menu. Logs: Worker → **Observability**.
 
 Limits to know: on the Workers Free plan each request gets 10 ms of CPU time (time spent waiting on Gemini, Supabase or a job page does not count) and 50 outbound requests. Most requests fit; if very large job pages fail with "exceeded CPU", the Workers Paid plan raises the CPU limit.
-
-## Deploy on Render (alternative)
-
-| Setting | Value |
-|---|---|
-| **Branch** | `main` |
-| **Build Command** | `bun install && bun run build` |
-| **Start Command** | `bun run start` |
-
-Environment variables:
-
-- `NODE_ENV` = `production`
-- `GEMINI_API_KEY` = your Google AI Studio key
-- `SUPABASE_URL` = your Supabase project URL
-- `SUPABASE_ANON_KEY` = Supabase **anon / publishable** key. Required in production: the API returns 503 without Supabase.
-- `GOOGLE_OAUTH_CLIENT_ID` = optional; the Google client ID from Supabase's Google provider, so sign-in shows your app's name
-- `EXTRACTION_DAILY_LIMIT` = optional per-user daily Gemini extraction limit (default 30)
-- `ALLOWED_USER_EMAILS` = optional comma-separated Google account emails allowed to call `/api`
-
-`PORT` and `RENDER_GIT_COMMIT` are set by Render automatically; the commit feeds the version line in the Settings menu.
-
-Then **Manual Deploy**. Confirm logs show `Persistence: Supabase with Google sign-in`.
 
 ## Stack
 

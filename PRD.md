@@ -31,7 +31,7 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Extraction | Cheerio scraper, dedicated ATS APIs, Google Gemini (`@google/genai`, `gemini-3.8-flash`) |
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
 | Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
-| Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. The Render web service (`render.yaml`) still works as an alternative host. Both build with Bun |
+| Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. Builds use Bun. `server.ts` (Node + Express) is for local development |
 | Optional | Google Sheets sync from the browser (4.6), via `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` |
 
 ---
@@ -75,7 +75,7 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Without Supabase the API runs as a single local user in development and returns 503 in production.
 
 ### 4.5 Versioning and checks
-- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`WORKERS_CI_COMMIT_SHA` on Cloudflare, `RENDER_GIT_COMMIT` on Render, else local git) show at the bottom of the Settings menu.
+- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`WORKERS_CI_COMMIT_SHA` on Cloudflare, else local git) show at the bottom of the Settings menu.
 - The **CI** check type-checks, tests and builds every PR.
 - The **Docs updated** check fails a PR that changes app files without changing a doc, and a `schema.sql` change without a `docs/MIGRATIONS.md` entry (`AGENTS.md`).
 
@@ -162,7 +162,7 @@ interface JobRecord {
 | `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` | Optional | The Apps Script web app's `/exec` URL and its key (4.7). Store both as Secrets |
 | `GMAIL_BRIDGE_OWNER_EMAIL` | Optional | The only account allowed to see Gmail suggestions. All three must be set or the feature stays off |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` on Node, and makes the API refuse to run without Supabase. Set in `wrangler.toml` for Cloudflare |
-| `PORT` | Optional | Listen port on Node (default 3000; Render sets it). Unused on Cloudflare |
+| `PORT` | Optional | Listen port on Node (default 3000). Unused on Cloudflare |
 | `DISABLE_HMR` | Optional | `true` turns off Vite hot reload and file watching in dev |
 
 See `README.md` for local setup and deployment steps, and `docs/MIGRATIONS.md` for upgrading an existing database.

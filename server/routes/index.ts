@@ -27,7 +27,7 @@ apiRouter.route('/email-suggestions', emailSuggestionsRouter);
 apiRouter.route('/', extractRouter);
 
 /**
- * The API as one app answering under /api. The same app runs under Node (server.ts, used locally and on Render) and
+ * The API as one app answering under /api. The same app runs under Node (server.ts, used for local development) and
  * on Cloudflare Workers (worker.ts).
  */
 export const apiApp = new Hono<AppEnv>().route('/api', apiRouter);
