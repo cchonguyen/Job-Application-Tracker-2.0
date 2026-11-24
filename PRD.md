@@ -13,10 +13,10 @@ Capture a job posting with one click from its link (or from the page you are vie
 
 ## 2. Product rules
 
-- **Every ingest is an immutable snapshot.** A saved job keeps the JD details as captured. Re-ingesting a reposted or similar job adds a new row; it never overwrites or updates an existing one. Only user-owned fields change after capture: status, date applied, notes and manual edits. *Exception for incomplete stubs:* When an automated ingest is blocked by bot/login walls (producing a Tier 5 fallback row marked **Needs review**), capturing that exact job page again with real content (e.g. via the 1-Click Capture Bookmarklet or manual paste) automatically updates the existing stub row in-place with the completed extraction while strictly preserving all user-owned fields (status, date applied, date added, notes, status history). No duplicate warning is triggered and no second row is created.
+- **Every ingest is an immutable snapshot.** A saved job keeps the JD details as captured. Re-ingesting a reposted or similar job adds a new row; it never overwrites or updates an existing one. Only user-owned fields change after capture: status, date applied, notes and manual edits. *Exception for incomplete stubs:* When an automated ingest is blocked by bot/login walls (producing a Tier 5 fallback row marked **Needs review**), capturing that same link again with real content (with the one-click capture bookmarklet, or by re-ingesting the link once it can be read) automatically updates the existing stub row in-place with the completed extraction while strictly preserving all user-owned fields (status, date applied, date added, notes, status history). No duplicate warning is triggered and no second row is created.
 - **Never invent posting details.** When no model actually read the posting, fields that could not be read are stored as `Unknown` / `Not listed`, not as plausible defaults or benchmark salaries. Such jobs show a **Needs review** badge. Jobs saved before v0.3.0 may carry the old hard-coded company placeholder (1,000+ employees, United States, Private); the UI shows that exact trio as Unknown.
 - **Always persist canonical unwrapped URLs.** Ingested URLs are canonicalized at Phase 0 (unwrapping aggregator redirects, stripping tracking query parameters, and trimming `/apply` sub-routes) before persistence in `JobRecord.url`, ensuring clean links, reliable 6-month duplicate matching, and seamless stub upgrades.
-- **Duplicates are flagged, not blocked.** A new job is flagged when it has the same posting URL as, or is at the same company as, one of the user's applications from the past six months (any role there counts; same-role matches rank first). The same title at a different company is never flagged. The user sees a comparison and chooses to save anyway or skip.
+- **Duplicates are flagged, not blocked.** A new job is flagged when it has the same posting URL as, or is at the same company as, one of the user's applications from the past six months (any role there counts; same-role matches rank first). An application counts by its applied date; a Saved job with no applied date does not. The same title at a different company is never flagged. The user sees a comparison and chooses to save anyway or skip.
 - **Each account sees only its own jobs.** Every `/api` call (except `GET /api/auth/config`) carries the signed-in user's token, and Postgres row-level security enforces ownership (4.4).
 
 ---
@@ -31,8 +31,8 @@ Capture a job posting with one click from its link (or from the page you are vie
 | Extraction | Cheerio scraper, dedicated ATS APIs, Google Gemini (`@google/genai`, `gemini-3.8-flash`) |
 | Storage | Supabase Postgres when `SUPABASE_URL` + `SUPABASE_ANON_KEY` are set, otherwise local `spreadsheet_data.json` (one or the other, not mirrored) |
 | Accounts | Supabase Auth with Google sign-in; each job row has an owner (`user_id`) enforced by row-level security |
-| Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. The Render web service (`render.yaml`) still works as an alternative host. Both build with Bun |
-| Optional | Google Sheets sync from the browser (4.6), via `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in `firebase-applet-config.json`) |
+| Hosting | Cloudflare Workers (`wrangler.toml`): `dist/` is served as static assets with a single-page-app fallback, and only `/api/*` runs the Worker. Cloudflare Workers Builds deploys `main`. Builds use Bun. `server.ts` (Node + Express) is for local development |
+| Optional | Google Sheets sync from the browser (4.6), via `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` |
 
 ---
 
@@ -44,17 +44,17 @@ Capture a job posting with one click from its link (or from the page you are vie
 - **One-click capture bookmarklet** (Settings › One-click capture): drag the bookmark to the bookmarks bar, then click it on any posting. It opens a small tracker popup with the page URL and the rendered page text (or the current selection), sent in the URL fragment, and saves it through the same ingest. This covers client-rendered or bot-protected sites such as Darwinbox, Workday, SmartRecruiters, and LinkedIn. If an incomplete **Needs review** stub already exists for this URL, the bookmarklet upgrades it in-place. Real-time cross-tab synchronization over `BroadcastChannel('jat-jobs-sync')` (with `localStorage` fallback) immediately reflects saved or upgraded jobs in the main tracker tab and open Job Detail drawer without refreshing the page. A per-browser token embedded in the bookmark stops other sites from adding jobs through crafted links; resetting it retires old bookmarks.
 
 ### 4.2 Extraction pipeline (`server/services/parsing`)
-Supports 25+ ATS and career platforms across 5 coordinated layers with early exit and WAF bypass:
+`detectAts()` (`src/lib/atsDetect.ts`) recognizes 30 ATS and job-board URL patterns; nine of them have a direct API handler (Tier 1). The steps run in this order and stop at the first one that produces a job:
 1. **Phase 0, Pre-Flight Canonicalizer**: Unwraps aggregator redirects (LinkedIn `/redir/redirect`, Indeed `/rc/clk`, Glassdoor), rewrites LinkedIn `currentJobId` and Indeed `jk` view URLs, strips tracking noise (`utm_*`, `gh_src`, etc.) and `/apply` subpaths while preserving critical ATS job IDs (`?gh_jid`, `?ashby_jid`, etc.), guarded against SSRF by `fetchPublicUrl`.
 2. **Tier 1, ATS APIs**: Direct REST and JSON APIs for Greenhouse, Lever, Workable (`.md` and v3 API), Ashby, Workday (`/wday/cxs` JSON with automatic fallback to Tier 2 SSR JSON-LD), SmartRecruiters, Recruitee, Pinpoint, and BambooHR.
 3. **Strict Fast-Path Normalizer (Tier 1.5 & Tier 2.5)**: When Tier 1 or Tier 2 retrieves structured data with valid company, title, location, and substantive text (>= 200 clean characters), the record is deterministically normalized in `< 5ms` (title/team splitting, skill taxonomy matching, seniority/department classification, summary extraction) and skips Gemini entirely (**0 AI quota charged**).
 4. **Tier 2, HTML scrape & hydration state**: Stream-bounded (2MB max via `readResponseTextUpTo`), recursive Schema.org `JobPosting` JSON-LD parser with salary unit awareness (`YEAR` vs `HOUR`), SPA hydration state reader (`<script id="__NEXT_DATA__">`, `window.__INITIAL_STATE__`), and iCIMS iframe unnesting (`?in_iframe=1`).
-5. **WAF / Bot-Wall Short-Circuit**: URLs on login-walled or bot-guarded portals (LinkedIn returning HTTP 999, Darwinbox SPA shell, Cloudflare 401/403/429) that fail Tier 2 immediately short-circuit past Tier 4 directly to Tier 5 in `< 3s`, avoiding 20–40s hangs, alerting the user via an informative warning toast that automated ingestion was blocked and the job was saved as "Needs review", and consuming **0 AI quota**.
-6. **Tier 3, Gemini on scraped content**: Structured JSON extraction from what Tier 2 retrieved (`gemini-3.8-flash`).
+5. **Tier 3, Gemini on scraped content**: Structured JSON extraction from what Tier 2 retrieved (`gemini-3.8-flash`), when Tier 2 found JSON-LD or more than 150 characters of text.
+6. **WAF / Bot-Wall Short-Circuit**: Checked before Tier 4. Postings on LinkedIn, Wellfound, Glassdoor and Darwinbox, and any page that answered HTTP 401/403/429/999 or a Cloudflare challenge, skip Tier 4 and go straight to Tier 5 in `< 3s`, avoiding 20–40s hangs and consuming **0 AI quota**. The user gets a warning toast that the job was saved as **Needs review**.
 7. **Tier 4, Gemini URL context**: Gemini fetches the page itself with the `url_context` tool (skipped on hard WAF/auth walls).
 8. **Tier 5, Deterministic fallback**: Company and title from URL or HTML tags; unreadable fields marked `Unknown` / `Not listed` with the **Needs review** badge, paired with an actionable 1-Click Bookmarklet callout in the Job Detail drawer.
 
-Every network step has a timeout (ATS APIs 4–6 s, scraper 10 s, Gemini 25 s, Gemini URL context 40 s), so an ingest always finishes. The ATS diagnostic tool (Settings › ATS Regex Diagnostic, `POST /api/test-ats-diagnostic`) shows each tier's result for a URL.
+Every network step has a timeout (ATS APIs 4–6 s, scraper 10 s, Gemini 25 s, Gemini URL context 40 s), so an ingest always finishes. The ATS diagnostic tool (Settings › ATS diagnostic, `POST /api/test-ats-diagnostic`) shows each tier's result for a URL. It counts against the daily AI quota like a normal ingest but saves nothing. Its example links use made-up posting IDs, so they show routing rather than a full read.
 
 ### 4.2a Company facts (`server/services/company`)
 Headcount, headquarters, ownership and founding year come from real sources, field by field, in this order: **Wikidata** (free, no key; matched on the exact company name and only entities that look like a business), facts already saved on earlier jobs at the same company, the posting extraction, then a **Gemini call grounded in Google Search** for anything still missing (answers without search grounding are discarded). Results are cached for 12 hours per company. A field no source states stays `Unknown`, and the source is stored in `companyMetadata.source` and shown under Company Intelligence. Jobs saved without facts get the same lookup when their detail view opens; it fills the view only, and the stored snapshot is not changed.
@@ -75,19 +75,19 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 - Without Supabase the API runs as a single local user in development and returns 503 in production.
 
 ### 4.5 Versioning and checks
-- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`WORKERS_CI_COMMIT_SHA` on Cloudflare, `RENDER_GIT_COMMIT` on Render, else local git) show at the bottom of the Settings menu.
+- Every PR bumps `version` in `package.json` (MINOR for features and behavior changes, PATCH for fixes and chores), enforced by the **Version bump** check. The version and deployed commit (`WORKERS_CI_COMMIT_SHA` on Cloudflare, else local git) show at the bottom of the Settings menu.
 - The **CI** check type-checks, tests and builds every PR.
 - The **Docs updated** check fails a PR that changes app files without changing a doc, and a `schema.sql` change without a `docs/MIGRATIONS.md` entry (`AGENTS.md`).
 
 ### 4.6 Google Sheets sync (`src/lib/googleSheets.ts`, `src/hooks/useGoogleSheetsSync.ts`)
-- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config` (or `oAuthClientId` in `firebase-applet-config.json`, using the Google Identity Services popup, with Firebase Auth's popup as an optional fallback when Firebase config is populated). The access token is kept in memory only.
+- Runs entirely in the browser and is separate from app sign-in: the user grants Drive and Sheets access in Google's own popup (Google Identity Services) using `GOOGLE_OAUTH_CLIENT_ID` from `/api/auth/config`. The access token is kept in memory only, so a page reload asks again.
 - The user picks an existing spreadsheet or creates one. Sync writes a header plus one row per job to the first tab from `A1`, prefixes formula trigger characters (`=`, `+`, `-`, `@`, tab, CR) with `'` to prevent formula injection, and clears leftover rows below, so the tab mirrors the tracker and manual edits there are overwritten.
 - Auto-sync (optional) re-syncs shortly after any change to the job list. The chosen sheet and the auto-sync setting are remembered per browser in `localStorage`.
-- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins** (and in the Firebase project's **Authorized domains** if using Firebase fallback).
+- For a new deployment, the app's URL must be in that OAuth client's **Authorized JavaScript origins**.
 
 ### 4.7 Gmail status suggestions (`src/lib/emailSignals.ts`, `apps-script/GmailBridge.gs`)
 - A personal feature for the account named in `GMAIL_BRIDGE_OWNER_EMAIL`. Every other account gets `enabled: false` and never sees the owner's mail. Setup steps are in `docs/GMAIL_BRIDGE.md`.
-- The owner deploys `apps-script/GmailBridge.gs` in their own Google account as an Apps Script web app. It only reads mail: when called with the right key it searches recent job emails (ATS senders, or subjects about applications, interviews and offers) and returns up to 200 summaries (ids, date, sender, subject, the first 1,500 characters of plain text, and up to 20 links). The tracker holds no Gmail token.
+- The owner deploys `apps-script/GmailBridge.gs` in their own Google account as an Apps Script web app. It only reads mail: when called with the right key it searches recent job emails (ATS senders, subjects about applications, interviews and offers, or common rejection phrases; chats and promotions are skipped) and returns up to 150 summaries from at most 100 threads, newest first and leaving out mail the owner sent (ids, date, sender, subject, the first 1,500 characters of plain text, and up to 20 links). The tracker holds no Gmail token.
 - Settings › Gmail suggestions calls `GET /api/email-suggestions`, which asks the bridge for the last 30 days and builds suggestions. The modal footer displays the scanned email count and the bridge's `version` (`Bridge v3`, or `Bridge pre-v3` for older deployments), and any rejection emails that did not match an open job are listed in a muted **Unmatched rejection emails** section. Nothing is changed until the user clicks **Apply**, which goes through the normal status update. **Dismiss** hides that email's suggestion in this browser.
 - Classifying uses keyword rules only, so it never uses Gemini quota. Rejection phrases win over everything except job-alert mail, which is ignored. After that, Offer beats Interviewing, which beats an application confirmation (Applied).
 - Matching considers only jobs in Saved, Applied, Interviewing or Offer. Signals are the ATS board slug from the job's link (Greenhouse, Lever, Ashby, Workday, SmartRecruiters) found in the email's links or sender, and the company name in the sender's name, domain or subject, plus title words as a tie-breaker. A clear winner is high confidence. A weaker or close match is shown as "check this".
@@ -112,8 +112,8 @@ Headcount, headquarters, ownership and founding year come from real sources, fie
 | `POST` | `/api/jobs/import` | Upsert imported jobs by id |
 | `POST` | `/api/jobs/reparse` | Re-normalize stored records |
 | `GET` | `/api/company-facts?company=&url=&title=` | Look up company facts for a job saved without them (read-only) |
-| `GET` | `/api/email-suggestions?days=` | Owner only. Suggested status changes from recent Gmail via the Apps Script bridge (read-only) |
-| `POST` | `/api/test-ats-diagnostic` | Run the pipeline on a URL and report every tier |
+| `GET` | `/api/email-suggestions?days=` | Owner only. Suggested status changes from recent Gmail via the Apps Script bridge (read-only). `days` is 1–60, default 14; the app asks for 30 |
+| `POST` | `/api/test-ats-diagnostic` | Run the pipeline on a URL and report every tier, without saving |
 
 ---
 
@@ -156,13 +156,13 @@ interface JobRecord {
 |---|---|---|
 | `GEMINI_API_KEY` | Recommended | Gemini extraction (Tiers 3–4 and pasted text) |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Production | Postgres storage and Google sign-in; the anon key is public by design |
-| `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase |
+| `GOOGLE_OAUTH_CLIENT_ID` | Recommended | Google's own sign-in popup on this site, so the account chooser names the app, not Supabase; also required for Google Sheets sync |
 | `EXTRACTION_DAILY_LIMIT` | Optional | Extractions per user per UTC day (default 30; 0 turns it off) |
 | `ALLOWED_USER_EMAILS` | Optional | Comma-separated Google account emails allowed to call `/api`; when empty, any Google account may sign in |
 | `GMAIL_BRIDGE_URL`, `GMAIL_BRIDGE_KEY` | Optional | The Apps Script web app's `/exec` URL and its key (4.7). Store both as Secrets |
 | `GMAIL_BRIDGE_OWNER_EMAIL` | Optional | The only account allowed to see Gmail suggestions. All three must be set or the feature stays off |
 | `NODE_ENV` | Production | `production` serves the built client from `dist/` on Node, and makes the API refuse to run without Supabase. Set in `wrangler.toml` for Cloudflare |
-| `PORT` | Optional | Listen port on Node (default 3000; Render sets it). Unused on Cloudflare |
+| `PORT` | Optional | Listen port on Node (default 3000). Unused on Cloudflare |
 | `DISABLE_HMR` | Optional | `true` turns off Vite hot reload and file watching in dev |
 
 See `README.md` for local setup and deployment steps, and `docs/MIGRATIONS.md` for upgrading an existing database.

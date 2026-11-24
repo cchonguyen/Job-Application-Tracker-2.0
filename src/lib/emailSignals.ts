@@ -3,6 +3,7 @@
 
 import type { JobRecord, JobStatus } from '../types';
 import { detectAts } from './atsDetect';
+import { normalizeCompanyName } from './companyName';
 import type { EmailClassification, EmailItem, EmailSuggestion, UnmatchedRejection } from './emailSignals.types';
 
 const MATCHABLE_STATUSES: readonly JobStatus[] = ['Saved', 'Applied', 'Interviewing', 'Offer'];
@@ -15,19 +16,6 @@ const STATUS_RANK: Partial<Record<JobStatus, number>> = {
 };
 
 const ATS_TYPES = new Set(['greenhouse', 'lever', 'ashby', 'workday', 'smartrecruiters']);
-
-const COMPANY_SUFFIXES = new Set([
-  'inc',
-  'llc',
-  'ltd',
-  'corp',
-  'corporation',
-  'co',
-  'company',
-  'technologies',
-  'labs',
-  'group',
-]);
 
 const TITLE_STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'of', 'a', 'an', 'to', 'in', 'at', 'on', 'job', 'role', 'remote', 'hybrid', 'part', 'time', 'full',
@@ -142,14 +130,6 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-function normalizeCompany(value: string): string {
-  const tokens = normalizeText(value).split(' ').filter(Boolean);
-  while (tokens.length > 0 && COMPANY_SUFFIXES.has(tokens[tokens.length - 1])) {
-    tokens.pop();
-  }
-  return tokens.join(' ');
-}
-
 /** True when the normalized company name appears in the normalized text (whole words for short names). */
 function containsCompany(normalizedText: string, companyNorm: string): boolean {
   if (companyNorm.length < 3) return false;
@@ -181,7 +161,7 @@ function senderDomainLabel(email: string): string | undefined {
 function domainMatchesCompany(email: string, companyNorm: string): boolean {
   const label = senderDomainLabel(email);
   if (!label) return false;
-  const labelNorm = normalizeCompany(label.replace(/-/g, ' '));
+  const labelNorm = normalizeCompanyName(label.replace(/-/g, ' '), 'mail');
   if (labelNorm.length < 3) return false;
   return labelNorm === companyNorm || labelNorm.replace(/ /g, '') === companyNorm.replace(/ /g, '');
 }
@@ -240,7 +220,7 @@ function scoreJob(item: EmailItem, job: JobRecord): JobScore {
     reasons.push(`ATS board "${slug}"`);
   }
 
-  const companyNorm = normalizeCompany(job.company);
+  const companyNorm = normalizeCompanyName(job.company, 'mail');
   const sender = parseSender(item.from);
   const senderMatch =
     (sender.name !== '' && containsCompany(normalizeText(sender.name), companyNorm)) ||

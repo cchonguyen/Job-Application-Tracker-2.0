@@ -264,7 +264,7 @@ export const JobDetailModal = ({
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div className="flex-1 text-xs sm:text-sm">
                       <p className="font-semibold text-amber-900">
-                        Incomplete snapshot • Portal blocked automated reading
+                        Incomplete snapshot: the posting could not be read automatically
                       </p>
                       <p className="text-amber-800 mt-1 leading-relaxed">
                         This portal&apos;s bot-protection or login wall prevented our automated scanner from reading the full job posting.

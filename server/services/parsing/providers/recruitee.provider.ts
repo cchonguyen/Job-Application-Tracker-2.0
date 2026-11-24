@@ -1,12 +1,10 @@
 import { slugToCompanyName } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson, formatIntegerToK } from '../../../../src/lib/salary.ts';
-import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
-import { AtsProvider, AtsProviderOptions, AtsProviderResult } from './base.provider.ts';
+import { AtsProvider, AtsProviderOptions, AtsProviderResult, finishAtsExtraction } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { fetchPublicUrl } from '../utils/safeFetch.ts';
 import { cleanHtmlDescription } from '../utils/schemaOrgNormalizer.ts';
-import { tryFastPathNormalize } from '../utils/fastPathNormalizer.ts';
 
 export interface RecruiteeOffer {
   id?: number | string;
@@ -113,39 +111,7 @@ export class RecruiteeProvider implements AtsProvider {
     const fullText = [offer.description, offer.requirements].filter(Boolean).join('\n');
     const parsedSalary = this.parseSalary(offer);
 
-    const fastPath = tryFastPathNormalize({
-      company: companyHint,
-      jobTitle: offer.title || titleHint,
-      location: this.formatLocation(offer),
-      descriptionHtml: fullText,
-      department: offer.department,
-      employmentType: offer.employment_type_code,
-      salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : undefined,
-      salaryMin: parsedSalary.salaryMin,
-      salaryMax: parsedSalary.salaryMax,
-      rawPayload: offer,
-    });
-
-    if (fastPath) {
-      diagnosticSteps.push({
-        tier: 'Tier 1.5 (Fast-Path Normalizer)',
-        name: 'Strict Fast-Path Normalizer',
-        status: 'success',
-        details: 'Structured ATS data satisfied high-confidence threshold. Extracted deterministically with 0 AI quota consumed.',
-      });
-      return {
-        extractedData: fastPath,
-        tierUsed: 'ATS API (Recruitee • Fast-Path)',
-      };
-    }
-
-    if (options?.checkAiQuota && !(await options.checkAiQuota())) {
-      diagnosticSteps.push({
-        tier: 'Tier 3 (AI Quota Check)',
-        name: 'Daily AI Extraction Quota Limit',
-        status: 'skipped',
-        details: 'Daily AI extraction quota reached. Skipping Gemini normalization.',
-      });
+    const buildFallback = (): ExtractedJobAttributes => {
       const fallbackCompany = companyHint;
       const fallbackTitle = offer.title || titleHint || 'Job Opening';
       const fallbackLocation = this.formatLocation(offer);
@@ -160,7 +126,7 @@ export class RecruiteeProvider implements AtsProvider {
 
       const isSr = /\b(sr|senior|lead|principal|staff|director|head|vp|manager)\b/i.test(fallbackTitle);
 
-      const fallbackData: ExtractedJobAttributes = {
+      return {
         company: fallbackCompany,
         jobTitle: fallbackTitle,
         location: fallbackLocation,
@@ -177,79 +143,37 @@ export class RecruiteeProvider implements AtsProvider {
           requiredSkills: [],
         },
       };
+    };
 
-      return {
-        extractedData: fallbackData,
-        tierUsed: 'Direct ATS API (Recruitee)',
-      };
-    }
-
-    const geminiStart = Date.now();
-    diagnosticSteps.push({
-      tier: 'Tier 3 (Gemini Normalization)',
-      name: 'Synthesize & Enrich ATS Payload',
-      status: 'pending',
-    });
-
-    try {
-      const structured = await extractWithGemini({
+    return finishAtsExtraction({
+      diagnosticSteps,
+      options,
+      fastPathInput: {
+        company: companyHint,
+        jobTitle: offer.title || titleHint,
+        location: this.formatLocation(offer),
+        descriptionHtml: fullText,
+        department: offer.department,
+        employmentType: offer.employment_type_code,
+        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : undefined,
+        salaryMin: parsedSalary.salaryMin,
+        salaryMax: parsedSalary.salaryMax,
+        rawPayload: offer,
+      },
+      buildGeminiInput: () => ({
         url,
         sourceType: 'RECRUITEE REST API',
         rawContent: JSON.stringify(offer),
         companyHint,
         jobTitleHint: titleHint,
-      });
-
-      diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
-      diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - geminiStart;
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Normalized attributes for ${structured.company} - ${structured.jobTitle}`;
-
-      return {
-        extractedData: structured,
-        tierUsed: 'ATS API (Recruitee)',
-      };
-    } catch (geminiErr: any) {
-      diagnosticSteps[diagnosticSteps.length - 1].status = 'failed';
-      diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - geminiStart;
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini call failed (${geminiErr.message}). Using direct ATS parsed fields.`;
-
-      const fallbackCompany = companyHint;
-      const fallbackTitle = offer.title || titleHint || 'Job Opening';
-      const fallbackLocation = this.formatLocation(offer);
-      const parsedSalary = this.parseSalary(offer);
-
-      let fallbackSummary = '';
-      if (offer.description) {
-        const cleanDesc = cleanHtmlDescription(offer.description).replace(/\s+/g, ' ').trim();
-        fallbackSummary = cleanDesc.length > 450 ? cleanDesc.slice(0, 450) + '...' : cleanDesc;
-      } else {
-        fallbackSummary = `${fallbackCompany} is recruiting for the role of ${fallbackTitle}. Direct position fetched via the official Recruitee job posting API.`;
-      }
-
-      const isSr = /\b(sr|senior|lead|principal|staff|director|head|vp|manager)\b/i.test(fallbackTitle);
-
-      const fallbackData: ExtractedJobAttributes = {
-        company: fallbackCompany,
-        jobTitle: fallbackTitle,
-        location: fallbackLocation,
-        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
-        salaryMin: parsedSalary.salaryMin,
-        salaryMax: parsedSalary.salaryMax,
-        industry: 'Unknown',
-        summary: fallbackSummary,
-        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
-        positionMetadata: {
-          seniority: isSr ? 'Senior' : 'Mid-level',
-          department: offer.department || 'Unknown',
-          employmentType: offer.employment_type_code || 'Full-time',
-          requiredSkills: [],
-        },
-      };
-
-      return {
-        extractedData: fallbackData,
-        tierUsed: 'Direct ATS API (Recruitee)',
-      };
-    }
+      }),
+      buildFallback,
+      tierNames: {
+        fastPath: 'ATS API (Recruitee • Fast-Path)',
+        gemini: 'ATS API (Recruitee)',
+        direct: 'Direct ATS API (Recruitee)',
+      },
+      recordDurationOnFailure: true,
+    });
   }
 }

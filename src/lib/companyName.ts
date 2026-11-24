@@ -130,3 +130,113 @@ export function deriveCompanyFromTitle(rawTitle?: string | null): string | null 
 
   return null;
 }
+
+/**
+ * Legal-entity words shared by the 'match' and 'exact' levels. 'mail' keeps its
+ * own trailing-only list (see MAIL_TRAILING_SUFFIXES) because it never stripped
+ * "incorporated" or "limited".
+ */
+const LEGAL_ENTITY_WORDS: readonly string[] = [
+  'inc',
+  'incorporated',
+  'llc',
+  'ltd',
+  'limited',
+  'corp',
+  'corporation',
+  'co',
+  'company',
+];
+
+/** 'match': words dropped anywhere in a name for duplicate detection. */
+const MATCH_STOP_WORDS = new Set<string>([
+  ...LEGAL_ENTITY_WORDS,
+  'the',
+  'technologies',
+  'technology',
+  'tech',
+  'solutions',
+  'labs',
+  'group',
+  'holdings',
+  'enterprises',
+  'services',
+  'systems',
+  'global',
+  'international',
+]);
+
+/** 'mail': words dropped only from the end of a name when matching Gmail senders and subjects. */
+const MAIL_TRAILING_SUFFIXES = new Set<string>([
+  'inc',
+  'llc',
+  'ltd',
+  'corp',
+  'corporation',
+  'co',
+  'company',
+  'technologies',
+  'labs',
+  'group',
+]);
+
+/** 'exact': legal forms dropped anywhere in a name for Wikidata / company-facts lookup. */
+const EXACT_LEGAL_FORM_PATTERN = new RegExp(
+  `\\b(${[...LEGAL_ENTITY_WORDS, 'gmbh', 'plc', 'sa', 'ag', 'bv', 'pbc'].join('|')})\\b`,
+  'g'
+);
+
+/**
+ * Reduces a company name to a comparison key. One home for the three rule sets:
+ *
+ * - 'match': duplicate detection. Lowercases, drops text in parentheses and
+ *   punctuation, then removes stop words and legal suffixes wherever they appear.
+ *   e.g. "Stripe, Inc." -> "stripe", "Globex Systems" -> "globex".
+ * - 'mail': Gmail matching. Keeps letters and digits in any script, then removes
+ *   legal suffixes only from the end. e.g. "Maven Clinic, Inc." -> "maven clinic".
+ * - 'exact': Wikidata / company-facts lookup. Turns "&" into "and", keeps ASCII
+ *   letters and digits only, and removes legal forms (Inc, GmbH, SA, ...) anywhere.
+ *   e.g. "Johnson & Johnson" -> "johnson and johnson".
+ *
+ * Returns '' for null, undefined or blank input.
+ */
+export function normalizeCompanyName(
+  name: string | null | undefined,
+  level: 'match' | 'mail' | 'exact'
+): string {
+  if (!name) return '';
+
+  if (level === 'match') {
+    let cleaned = name.toLowerCase().trim();
+    // Strip parenthesized text like (US), (Remote)
+    cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
+    // Replace punctuation and symbols with space
+    cleaned = cleaned.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()'"@+?|–—]/g, ' ');
+    return cleaned
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0 && !MATCH_STOP_WORDS.has(t))
+      .join(' ');
+  }
+
+  if (level === 'mail') {
+    const tokens = name
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+    while (tokens.length > 0 && MAIL_TRAILING_SUFFIXES.has(tokens[tokens.length - 1])) {
+      tokens.pop();
+    }
+    return tokens.join(' ');
+  }
+
+  return name
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(EXACT_LEGAL_FORM_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

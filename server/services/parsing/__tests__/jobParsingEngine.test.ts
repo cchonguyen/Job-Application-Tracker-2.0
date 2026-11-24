@@ -126,7 +126,7 @@ describe('JobParsingEngine (Slice 4)', () => {
       expect(vi.mocked(extractWithUrlContext)).not.toHaveBeenCalled();
 
       // Diagnostic step verifies Fast-Path
-      const fastPathStep = result.diagnosticSteps.find((s) => s.tier === 'Tier 1.5 (Fast-Path Normalizer)');
+      const fastPathStep = result.diagnosticSteps.find((s) => s.tier === 'Tier 2.5 (Fast-Path Normalizer)');
       expect(fastPathStep).toBeDefined();
       expect(fastPathStep?.status).toBe('success');
       expect(fastPathStep?.details).toContain('0 AI quota consumed');

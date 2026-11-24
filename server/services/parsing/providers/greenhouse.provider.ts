@@ -1,12 +1,10 @@
 import * as cheerio from 'cheerio';
 import { slugToCompanyName } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson } from '../../../../src/lib/salary.ts';
-import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
-import { AtsProvider, AtsProviderOptions, AtsProviderResult } from './base.provider.ts';
+import { AtsProvider, AtsProviderOptions, AtsProviderResult, finishAtsExtraction } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { fetchPublicUrl } from '../utils/safeFetch.ts';
-import { tryFastPathNormalize } from '../utils/fastPathNormalizer.ts';
 
 export class GreenhouseProvider implements AtsProvider {
   readonly name = 'Greenhouse';
@@ -115,73 +113,31 @@ export class GreenhouseProvider implements AtsProvider {
     const locationName = atsPayload.location?.name || atsPayload.offices?.[0]?.name;
     const cleanCompany = slugToCompanyName(companyHint.replace(/\d+$/, ''));
 
-    const fastPath = tryFastPathNormalize({
-      company: cleanCompany,
-      jobTitle: titleHint,
-      location: locationName,
-      descriptionHtml: rawDescription,
-      department: atsPayload.departments?.[0]?.name,
-      rawPayload: atsPayload,
-    });
-
-    if (fastPath) {
-      diagnosticSteps.push({
-        tier: 'Tier 1.5 (Fast-Path Normalizer)',
-        name: 'Strict Fast-Path Normalizer',
-        status: 'success',
-        details: 'Structured ATS data satisfied high-confidence threshold. Extracted deterministically with 0 AI quota consumed.',
-      });
-      return {
-        extractedData: fastPath,
-        tierUsed: 'ATS API (Greenhouse • Fast-Path)',
-      };
-    }
-
-    if (options?.checkAiQuota && !(await options.checkAiQuota())) {
-      diagnosticSteps.push({
-        tier: 'Tier 3 (AI Quota Check)',
-        name: 'Daily AI Extraction Quota Limit',
-        status: 'skipped',
-        details: 'Daily AI extraction quota reached. Skipping Gemini normalization.',
-      });
-      return {
-        extractedData: this.createFallbackData(atsPayload, companyHint, titleHint),
-        tierUsed: 'Direct ATS API (Greenhouse)',
-      };
-    }
-
-    const geminiStart = Date.now();
-    diagnosticSteps.push({
-      tier: 'Tier 3 (Gemini Normalization)',
-      name: 'Synthesize & Enrich ATS Payload',
-      status: 'pending',
-    });
-
-    try {
-      const structured = await extractWithGemini({
+    return finishAtsExtraction({
+      diagnosticSteps,
+      options,
+      fastPathInput: {
+        company: cleanCompany,
+        jobTitle: titleHint,
+        location: locationName,
+        descriptionHtml: rawDescription,
+        department: atsPayload.departments?.[0]?.name,
+        rawPayload: atsPayload,
+      },
+      buildGeminiInput: () => ({
         url,
         sourceType: 'GREENHOUSE REST API',
         rawContent: JSON.stringify(atsPayload),
         companyHint,
         jobTitleHint: titleHint,
-      });
-
-      diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
-      diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - geminiStart;
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Normalized attributes for ${structured.company} - ${structured.jobTitle}`;
-
-      return {
-        extractedData: structured,
-        tierUsed: 'ATS API (Greenhouse)',
-      };
-    } catch (geminiErr: any) {
-      diagnosticSteps[diagnosticSteps.length - 1].status = 'failed';
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini call failed (${geminiErr.message}). Using direct ATS parsed fields.`;
-
-      return {
-        extractedData: this.createFallbackData(atsPayload, companyHint, titleHint),
-        tierUsed: 'Direct ATS API (Greenhouse)',
-      };
-    }
+      }),
+      buildFallback: () => this.createFallbackData(atsPayload, companyHint, titleHint),
+      tierNames: {
+        fastPath: 'ATS API (Greenhouse • Fast-Path)',
+        gemini: 'ATS API (Greenhouse)',
+        direct: 'Direct ATS API (Greenhouse)',
+      },
+      recordDurationOnFailure: false,
+    });
   }
 }

@@ -4,7 +4,7 @@ import { parsingEngine } from '../services/parsing/index.ts';
 import { parseUrlDeterministically } from '../services/parsing/utils/htmlCleaner.ts';
 import { jobRepository, newJobId } from '../services/storage/index.ts';
 import { scopeOf } from '../middleware/requireUser.ts';
-import { companyLookupLimit, extractionLimit, takeDailyUsage } from '../middleware/extractionLimit.ts';
+import { companyLookupLimit, takeDailyUsage } from '../middleware/extractionLimit.ts';
 import { detectAts, canonicalizeJobUrl } from '../../src/lib/atsDetect.ts';
 import { initialDateAppliedForStatus } from '../../src/lib/jobDates.ts';
 import { initialStatusHistory } from '../../src/lib/statusHistory.ts';
@@ -16,7 +16,7 @@ import { needsManualReview } from '../../src/lib/formatHelpers.ts';
 
 export const extractRouter = new Hono<AppEnv>();
 
-// POST /api/extract-job: Ingest URL or manual text, run pipeline, and append to spreadsheet
+// POST /api/extract-job: ingest a URL or pasted text, run the pipeline, check for duplicates, and save the job
 extractRouter.post('/extract-job', async (c) => {
   const { url, manualText, status: initialStatus, notes, confirmDuplicate, candidateJob } = await readJsonBody(c);
   const scope = scopeOf(c);
@@ -62,7 +62,7 @@ extractRouter.post('/extract-job', async (c) => {
         tier: 'Safety Fallback',
         name: 'Free Tier Safety Guard',
         status: 'success',
-        details: 'Processed posting deterministically to prevent API rate-limit interruptions.',
+        details: 'The extraction pipeline failed, so company and title were read from the URL only.',
       },
     ];
   }
@@ -86,7 +86,30 @@ extractRouter.post('/extract-job', async (c) => {
       extractedData.team
     );
 
-    // Decision 3: In-place auto-upgrade of incomplete "Needs review" stubs
+    // The captured posting details. A new job and an upgraded "Needs review" stub both get exactly these fields;
+    // user-owned fields (status, dates, notes, history) are set only for a new job.
+    const snapshotFields = {
+      company,
+      jobTitle: parsedRoleTeam.jobTitle || 'Unknown Role',
+      team: parsedRoleTeam.team || extractedData.team || undefined,
+      location: extractedData.location || 'Not listed',
+      salary: extractedData.salary || 'Not listed',
+      salaryMin: extractedData.salaryMin ?? null,
+      salaryMax: extractedData.salaryMax ?? null,
+      industry: extractedData.industry || 'Unknown',
+      summary: extractedData.summary || '',
+      companyMetadata,
+      positionMetadata: {
+        seniority: extractedData.positionMetadata?.seniority || 'Unknown',
+        department: extractedData.positionMetadata?.department || 'Unknown',
+        employmentType: extractedData.positionMetadata?.employmentType || 'Unknown',
+        requiredSkills: extractedData.positionMetadata?.requiredSkills || [],
+      },
+      extractedVia: tierUsed,
+      url: canonicalUrl,
+    };
+
+    // A complete read of a link that already has a "Needs review" stub updates that stub in place (PRD section 2)
     const isComplete = !needsManualReview(tierUsed);
     const normCanonical = normalizeJobUrl(canonicalUrl);
 
@@ -98,26 +121,7 @@ extractRouter.post('/extract-job', async (c) => {
       );
 
       if (existingStub) {
-        const updatedJob = await jobRepository.updateJob(scope, existingStub.id, {
-          company,
-          jobTitle: parsedRoleTeam.jobTitle || 'Unknown Role',
-          team: parsedRoleTeam.team || extractedData.team || undefined,
-          location: extractedData.location || 'Not listed',
-          salary: extractedData.salary || 'Not listed',
-          salaryMin: extractedData.salaryMin ?? null,
-          salaryMax: extractedData.salaryMax ?? null,
-          industry: extractedData.industry || 'Unknown',
-          summary: extractedData.summary || '',
-          companyMetadata,
-          positionMetadata: {
-            seniority: extractedData.positionMetadata?.seniority || 'Unknown',
-            department: extractedData.positionMetadata?.department || 'Unknown',
-            employmentType: extractedData.positionMetadata?.employmentType || 'Unknown',
-            requiredSkills: extractedData.positionMetadata?.requiredSkills || [],
-          },
-          extractedVia: tierUsed,
-          url: canonicalUrl,
-        });
+        const updatedJob = await jobRepository.updateJob(scope, existingStub.id, snapshotFields);
 
         return c.json({
           success: true,
@@ -131,27 +135,11 @@ extractRouter.post('/extract-job', async (c) => {
 
     const newJobRecord = {
       id: newJobId(),
-      company,
-      jobTitle: parsedRoleTeam.jobTitle || 'Unknown Role',
-      team: parsedRoleTeam.team || extractedData.team || undefined,
-      location: extractedData.location || 'Not listed',
-      salary: extractedData.salary || 'Not listed',
-      salaryMin: extractedData.salaryMin ?? null,
-      salaryMax: extractedData.salaryMax ?? null,
+      ...snapshotFields,
+      url: canonicalUrl || '',
       status: finalStatus,
       dateApplied,
       dateAdded: nowIso.split('T')[0],
-      industry: extractedData.industry || 'Unknown',
-      summary: extractedData.summary || '',
-      url: canonicalUrl || '',
-      companyMetadata,
-      positionMetadata: {
-        seniority: extractedData.positionMetadata?.seniority || 'Unknown',
-        department: extractedData.positionMetadata?.department || 'Unknown',
-        employmentType: extractedData.positionMetadata?.employmentType || 'Unknown',
-        requiredSkills: extractedData.positionMetadata?.requiredSkills || [],
-      },
-      extractedVia: tierUsed,
       createdAt: nowIso,
       notes: notes || '',
       statusHistory: initialStatusHistory(finalStatus),

@@ -1,12 +1,10 @@
 import { slugToCompanyName } from '../../../../src/lib/companyName.ts';
 import { extractSalaryFromTextOrJson, formatIntegerToK } from '../../../../src/lib/salary.ts';
-import { extractWithGemini } from '../ai/geminiExtractor.ts';
 import { DiagnosticStep, ExtractedJobAttributes } from '../types.ts';
-import { AtsProvider, AtsProviderOptions, AtsProviderResult } from './base.provider.ts';
+import { AtsProvider, AtsProviderOptions, AtsProviderResult, finishAtsExtraction } from './base.provider.ts';
 import { UNKNOWN_COMPANY_METADATA } from '../unknowns.ts';
 import { fetchPublicUrl } from '../utils/safeFetch.ts';
 import { cleanHtmlDescription } from '../utils/schemaOrgNormalizer.ts';
-import { tryFastPathNormalize } from '../utils/fastPathNormalizer.ts';
 
 export interface PinpointPostingData {
   id?: string | number;
@@ -113,39 +111,8 @@ export class PinpointProvider implements AtsProvider {
     // Fast-Path Normalizer (Tier 1.5)
     const parsedSalary = this.parseSalary(data);
     const departmentName = typeof data.department === 'object' ? data.department?.name : data.department;
-    const fastPath = tryFastPathNormalize({
-      company: companyHint,
-      jobTitle: data.title || titleHint,
-      location: this.formatLocation(data),
-      descriptionHtml: data.description,
-      department: departmentName,
-      employmentType: data.employment_type,
-      salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : undefined,
-      salaryMin: parsedSalary.salaryMin,
-      salaryMax: parsedSalary.salaryMax,
-      rawPayload: data,
-    });
 
-    if (fastPath) {
-      diagnosticSteps.push({
-        tier: 'Tier 1.5 (Fast-Path Normalizer)',
-        name: 'Strict Fast-Path Normalizer',
-        status: 'success',
-        details: 'Structured ATS data satisfied high-confidence threshold. Extracted deterministically with 0 AI quota consumed.',
-      });
-      return {
-        extractedData: fastPath,
-        tierUsed: 'ATS API (Pinpoint • Fast-Path)',
-      };
-    }
-
-    if (options?.checkAiQuota && !(await options.checkAiQuota())) {
-      diagnosticSteps.push({
-        tier: 'Tier 3 (AI Quota Check)',
-        name: 'Daily AI Extraction Quota Limit',
-        status: 'skipped',
-        details: 'Daily AI extraction quota reached. Skipping Gemini normalization.',
-      });
+    const buildFallback = (afterGeminiFailure: boolean): ExtractedJobAttributes => {
       const fallbackCompany = companyHint;
       const fallbackTitle = data.title || titleHint || 'Job Opening';
       const fallbackLocation = this.formatLocation(data);
@@ -160,77 +127,13 @@ export class PinpointProvider implements AtsProvider {
 
       const isSr = /\b(sr|senior|lead|principal|staff|director|head|vp|manager)\b/i.test(fallbackTitle);
 
-      const fallbackData: ExtractedJobAttributes = {
-        company: fallbackCompany,
-        jobTitle: fallbackTitle,
-        location: fallbackLocation,
-        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : 'Not listed (ATS API)',
-        salaryMin: parsedSalary.salaryMin,
-        salaryMax: parsedSalary.salaryMax,
-        industry: 'Unknown',
-        summary: fallbackSummary,
-        companyMetadata: { ...UNKNOWN_COMPANY_METADATA },
-        positionMetadata: {
-          seniority: isSr ? 'Senior' : 'Mid-level',
-          department: (typeof data.department === 'object' ? data.department?.name : data.department) || 'Unknown',
-          employmentType: data.employment_type || 'Full-time',
-          requiredSkills: [],
-        },
-      };
+      // The two paths differ on an empty-string department: the quota path yields 'Unknown',
+      // the Gemini-failure path yields ''. Kept as-is.
+      const deptName = afterGeminiFailure
+        ? typeof data.department === 'string' ? data.department : data.department?.name || 'Unknown'
+        : (typeof data.department === 'object' ? data.department?.name : data.department) || 'Unknown';
 
       return {
-        extractedData: fallbackData,
-        tierUsed: 'Direct ATS API (Pinpoint)',
-      };
-    }
-
-    const geminiStart = Date.now();
-    diagnosticSteps.push({
-      tier: 'Tier 3 (Gemini Normalization)',
-      name: 'Synthesize & Enrich ATS Payload',
-      status: 'pending',
-    });
-
-    try {
-      const structured = await extractWithGemini({
-        url,
-        sourceType: 'PINPOINT REST API',
-        rawContent: JSON.stringify(data),
-        companyHint,
-        jobTitleHint: titleHint,
-      });
-
-      diagnosticSteps[diagnosticSteps.length - 1].status = 'success';
-      diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - geminiStart;
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Normalized attributes for ${structured.company} - ${structured.jobTitle}`;
-
-      return {
-        extractedData: structured,
-        tierUsed: 'ATS API (Pinpoint)',
-      };
-    } catch (geminiErr: any) {
-      diagnosticSteps[diagnosticSteps.length - 1].status = 'failed';
-      diagnosticSteps[diagnosticSteps.length - 1].durationMs = Date.now() - geminiStart;
-      diagnosticSteps[diagnosticSteps.length - 1].details = `Gemini call failed (${geminiErr.message}). Using direct ATS parsed fields.`;
-
-      const fallbackCompany = companyHint;
-      const fallbackTitle = data.title || titleHint || 'Job Opening';
-      const fallbackLocation = this.formatLocation(data);
-      const parsedSalary = this.parseSalary(data);
-
-      let fallbackSummary = '';
-      if (data.description) {
-        const cleanDesc = cleanHtmlDescription(data.description).replace(/\s+/g, ' ').trim();
-        fallbackSummary = cleanDesc.length > 450 ? cleanDesc.slice(0, 450) + '...' : cleanDesc;
-      } else {
-        fallbackSummary = `${fallbackCompany} is recruiting for the role of ${fallbackTitle}. Direct position fetched via the official Pinpoint job posting API.`;
-      }
-
-      const isSr = /\b(sr|senior|lead|principal|staff|director|head|vp|manager)\b/i.test(fallbackTitle);
-
-      const deptName = typeof data.department === 'string' ? data.department : data.department?.name || 'Unknown';
-
-      const fallbackData: ExtractedJobAttributes = {
         company: fallbackCompany,
         jobTitle: fallbackTitle,
         location: fallbackLocation,
@@ -247,11 +150,37 @@ export class PinpointProvider implements AtsProvider {
           requiredSkills: [],
         },
       };
+    };
 
-      return {
-        extractedData: fallbackData,
-        tierUsed: 'Direct ATS API (Pinpoint)',
-      };
-    }
+    return finishAtsExtraction({
+      diagnosticSteps,
+      options,
+      fastPathInput: {
+        company: companyHint,
+        jobTitle: data.title || titleHint,
+        location: this.formatLocation(data),
+        descriptionHtml: data.description,
+        department: departmentName,
+        employmentType: data.employment_type,
+        salary: parsedSalary.salary !== 'Not listed' ? parsedSalary.salary : undefined,
+        salaryMin: parsedSalary.salaryMin,
+        salaryMax: parsedSalary.salaryMax,
+        rawPayload: data,
+      },
+      buildGeminiInput: () => ({
+        url,
+        sourceType: 'PINPOINT REST API',
+        rawContent: JSON.stringify(data),
+        companyHint,
+        jobTitleHint: titleHint,
+      }),
+      buildFallback,
+      tierNames: {
+        fastPath: 'ATS API (Pinpoint • Fast-Path)',
+        gemini: 'ATS API (Pinpoint)',
+        direct: 'Direct ATS API (Pinpoint)',
+      },
+      recordDurationOnFailure: true,
+    });
   }
 }

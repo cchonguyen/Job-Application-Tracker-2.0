@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Inbox, CheckCircle2, FileSpreadsheet, Clock, RefreshCw } from 'lucide-react';
+import { Inbox, FileSpreadsheet, Clock, RefreshCw } from 'lucide-react';
 import { JobRecord, JobStatus } from '../types';
 import { useSpreadsheetFilter } from './spreadsheet/useSpreadsheetFilter';
 import { SpreadsheetToolbar } from './spreadsheet/SpreadsheetToolbar';
@@ -279,12 +279,6 @@ export const JobSpreadsheet = ({
 
         {/* Right: Technical Metrics Cluster */}
         <div className="flex items-center gap-3.5 sm:gap-4 flex-wrap text-slate-500">
-          {/* Storage Health */}
-          <div className="flex items-center gap-1.5" title="Persistent storage is active and healthy">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="font-medium text-slate-600">Storage Active</span>
-          </div>
-
           {/* Google Sheets Sync Status */}
           {googleSheetsProps && (
             <div className="flex items-center gap-1.5">

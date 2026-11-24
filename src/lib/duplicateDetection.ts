@@ -1,5 +1,6 @@
 import type { JobRecord } from '../types';
 import { canonicalizeJobUrl } from './atsDetect';
+import { normalizeCompanyName } from './companyName';
 
 export type DuplicateMatchType = 'both' | 'company' | 'role';
 
@@ -19,51 +20,11 @@ export interface DuplicateDetectionResult {
 }
 
 /**
- * Stop-words and corporate entity noise tokens stripped during company normalization.
- */
-const COMPANY_STOP_WORDS = new Set([
-  'the',
-  'inc',
-  'incorporated',
-  'llc',
-  'ltd',
-  'limited',
-  'corp',
-  'corporation',
-  'co',
-  'company',
-  'technologies',
-  'technology',
-  'tech',
-  'solutions',
-  'labs',
-  'group',
-  'holdings',
-  'enterprises',
-  'services',
-  'systems',
-  'global',
-  'international',
-]);
-
-/**
  * Normalizes a company name for fuzzy duplicate comparison.
  * e.g., "Stripe, Inc." -> "stripe", "Globex Systems" -> "globex"
  */
 export function normalizeCompany(name?: string | null): string {
-  if (!name) return '';
-  let cleaned = name.toLowerCase().trim();
-  // Strip parenthesized text like (US), (Remote)
-  cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
-  // Replace punctuation and symbols with space
-  cleaned = cleaned.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()'"@+?|–—]/g, ' ');
-  // Filter stop words
-  const tokens = cleaned
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0 && !COMPANY_STOP_WORDS.has(t));
-
-  return tokens.join(' ');
+  return normalizeCompanyName(name, 'match');
 }
 
 /**
