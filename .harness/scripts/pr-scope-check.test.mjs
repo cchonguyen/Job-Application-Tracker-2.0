@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets, sliceKey } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets, sliceKey, approvalRef, isHubSync, isAcceptedHubDeletion } from './pr-scope-check.mjs';
 import { AGENTS_MARKERS } from './lib/sync-core.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -591,6 +591,55 @@ test('a hub-sync PR that also changes a non-engine file is still flagged outside
   assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
 });
 
+const HUB_DEL = '.claude/commands/wrap.md';
+const syncInput = (over = {}) => ({
+  changed: ['.harness/managed.json'],
+  deleted: [HUB_DEL],
+  managed: { files: {} },
+  hashOf: () => null,
+  baseManaged: { files: { [HUB_DEL]: 'h1' } },
+  baseHashOf: (f) => (f === HUB_DEL ? 'h1' : null),
+  ...over,
+});
+
+test('isHubSync accepts an engine deletion the hub removed (base hash matches, head manifest omits it)', () => {
+  assert.equal(isHubSync(syncInput()), true);
+});
+
+test('isHubSync rejects a deletion when the base hash differs from the recorded hash', () => {
+  assert.equal(isHubSync(syncInput({ baseHashOf: () => 'other' })), false);
+});
+
+test('isHubSync rejects a deletion when the head manifest still lists the file', () => {
+  assert.equal(isHubSync(syncInput({ managed: { files: { [HUB_DEL]: 'h1' } } })), false);
+});
+
+test('isHubSync rejects an engine deletion with no base manifest', () => {
+  assert.equal(isHubSync(syncInput({ baseManaged: null, baseHashOf: null })), false);
+  assert.equal(isHubSync(syncInput({ deleted: ['.claude/commands/other.md'] })), false);
+});
+
+test('isAcceptedHubDeletion is false for a file the base manifest never recorded', () => {
+  assert.equal(isAcceptedHubDeletion('.claude/commands/other.md', { managed: { files: {} }, baseManaged: { files: {} }, baseHashOf: () => null }), false);
+});
+
+test('analyze treats an accepted hub-sync deletion as a note, not a Red tripwire', () => {
+  const input = {
+    changed: ['.harness/managed.json'],
+    diff: new Map([['.harness/managed.json', { added: [], removed: [] }]]),
+    strict: true,
+    hubSync: true,
+    deleted: [HUB_DEL],
+  };
+  const accepted = analyze({ ...input, hubSyncDeleted: [HUB_DEL] });
+  assert.deepEqual(accepted.problems, []);
+  assert.equal(accepted.tripwireFired, false);
+  assert.ok(accepted.notes.includes(`Hub sync removed a file the hub deleted: ${HUB_DEL}`), accepted.notes.join('; '));
+  const unaccepted = analyze({ ...input, hubSyncDeleted: [] });
+  assert.ok(unaccepted.problems.includes(`Red tripwire (file deleted): ${HUB_DEL}`));
+  assert.equal(unaccepted.tripwireFired, true);
+});
+
 test('isTemplateCopy is true only for a workflow identical to its hub template', () => {
   const WF = '.github/workflows/harness-labels.yml';
   const TPL = '.harness/templates/workflows/harness-labels.yml';
@@ -710,4 +759,35 @@ test('a test file outside Target files is allowed with a note', () => {
   });
   assert.ok(!r.problems.some((p) => p.includes('Outside the slice')), r.problems.join('; '));
   assert.ok(r.notes.includes('Test file outside Target files (allowed): src/other.test.js'));
+});
+
+test('approvalRef reads a merge commit\'s second parent and leaves an ordinary commit alone', () => {
+  assert.equal(approvalRef('HEAD', 'aaa bbb ccc\n'), 'HEAD^2');
+  assert.equal(approvalRef('HEAD', 'aaa bbb\n'), 'HEAD');
+  assert.equal(approvalRef('HEAD', ''), 'HEAD');
+});
+
+test('CLI finds Approved-Tripwire on the PR head when HEAD is a CI merge commit', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-merge-'));
+  const g = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  g('init', '-q', '-b', 'main');
+  g('config', 'user.email', 't@example.com');
+  g('config', 'user.name', 't');
+  fs.mkdirSync(path.join(dir, 'docs'));
+  fs.writeFileSync(path.join(dir, 'docs', 'old.md'), 'x\n');
+  g('add', '-A');
+  g('commit', '-q', '-m', 'base');
+  g('checkout', '-q', '-b', 'pr');
+  fs.rmSync(path.join(dir, 'docs', 'old.md'));
+  g('add', '-A');
+  g('commit', '-q', '-m', 'remove old\n\nApproved-Tripwire: docs/old.md');
+  g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'other.txt'), 'y\n');
+  g('add', '-A');
+  g('commit', '-q', '-m', 'main moves on');
+  g('checkout', '-q', '--detach', 'main');
+  g('merge', '-q', '--no-ff', '-m', 'Merge pr into main', 'pr');
+  const res = spawnSync('node', [SCRIPT, 'main', 'HEAD', '--strict'], { cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir } });
+  assert.match(res.stdout, /Approved tripwire \(file deleted\): docs\/old\.md/);
+  assert.doesNotMatch(res.stdout, /Red tripwire/);
 });
